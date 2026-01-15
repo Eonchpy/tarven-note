@@ -66,6 +66,7 @@ function registerTarvenNoteTools() {
 
   const toolNames = [
     "tarven_create_campaign",
+    "tarven_delete_campaign",
     "tarven_store_entities",
     "tarven_query"
   ];
@@ -114,6 +115,39 @@ function registerTarvenNoteTools() {
     formatMessage: () => ""
   });
 
+  const deleteCampaignSchema = Object.freeze({
+    $schema: "http://json-schema.org/draft-04/schema#",
+    type: "object",
+    properties: {
+      campaign_id: { type: "string", description: "要删除的战役ID" }
+    },
+    required: ["campaign_id"]
+  });
+
+  registerFunctionTool({
+    name: "tarven_delete_campaign",
+    displayName: "Tarven Delete Campaign",
+    description: "Delete a campaign and all its entities/relationships. Use when campaign is finished or no longer needed.",
+    parameters: deleteCampaignSchema,
+    action: async (params) => {
+      try {
+        const response = await fetch(`${backendUrl}/api/campaigns/${params.campaign_id}`, {
+          method: "DELETE"
+        });
+        if (!response.ok) {
+          return JSON.stringify({ success: false, error: "Campaign not found" });
+        }
+        if (currentCampaignId === params.campaign_id) {
+          currentCampaignId = null;
+        }
+        return JSON.stringify({ success: true, message: "战役已删除" });
+      } catch (error) {
+        return JSON.stringify({ success: false, error: error.message });
+      }
+    },
+    formatMessage: () => ""
+  });
+
   const storeEntitiesSchema = Object.freeze({
     $schema: "http://json-schema.org/draft-04/schema#",
     type: "object",
@@ -124,7 +158,11 @@ function registerTarvenNoteTools() {
         items: {
           type: "object",
           properties: {
-            type: { type: "string" },
+            type: {
+              type: "string",
+              enum: ["Character", "Location", "Event", "Clue", "Item", "Organization"],
+              description: "Entity type - MUST use one of these exact values"
+            },
             name: { type: "string" },
             properties: { type: "object" },
             metadata: { type: "object" }
@@ -139,7 +177,11 @@ function registerTarvenNoteTools() {
           properties: {
             from_entity_name: { type: "string" },
             to_entity_name: { type: "string" },
-            type: { type: "string" },
+            type: {
+              type: "string",
+              enum: ["KNOWS", "TRUSTS", "FEARS", "LOVES", "HATES", "LOCATED_AT", "WORKS_AT", "LIVES_AT", "PARTICIPATED_IN", "WITNESSED", "CAUSED", "OWNS", "USED", "FOUND", "BELONGS_TO", "CONNECTED_TO"],
+              description: "Relationship type - MUST use one of these exact values"
+            },
             properties: { type: "object" }
           }
         }
@@ -201,7 +243,7 @@ function registerTarvenNoteTools() {
   registerFunctionTool({
     name: "tarven_query",
     displayName: "Tarven Query",
-    description: "查询知识图谱中的实体、关系或路径",
+    description: "IMPORTANT: Query BEFORE generating narrative. When to query: 1) Player mentions any entity (character/location/item) 2) Player takes action - query current scene NPCs and items 3) During reasoning - query related entities. Rule: Query more when uncertain. Never fabricate if no results.",
     parameters: querySchema,
     action: async (params) => {
       if (!currentCampaignId) {
@@ -233,12 +275,19 @@ function registerTarvenNoteTools() {
         if (params.query_type === "path") {
           const fromName = params.from_name ?? "";
           const toName = params.to_name ?? "";
+          if (!fromName || !toName) {
+            return JSON.stringify({ success: false, error: "from_name/to_name required" });
+          }
           const maxHops = params.max_hops ?? 3;
           url += `/paths?from=${encodeURIComponent(fromName)}&to=${encodeURIComponent(toName)}&max_hops=${maxHops}`;
         }
         if (params.query_type === "subgraph") {
+          const entityId = params.entity_id ?? "";
+          if (!entityId) {
+            return JSON.stringify({ success: false, error: "entity_id required" });
+          }
           const depth = params.depth ?? 2;
-          url += `/subgraph?entity_id=${encodeURIComponent(params.entity_id)}&depth=${depth}`;
+          url += `/subgraph?entity_id=${encodeURIComponent(entityId)}&depth=${depth}`;
         }
         const response = await fetch(url);
         const data = await response.json();

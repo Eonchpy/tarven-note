@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from server.repositories.entities import create_entity, get_entity_by_name
 from server.repositories.relationships import create_relationship
 from server.schemas.ingest import IngestRequest, IngestResponse
+from server.services.normalizer import normalize_entity_type, normalize_relationship_type
 
 router = APIRouter(prefix="/api/campaigns/{campaign_id}", tags=["ingest"])
 
@@ -12,9 +13,10 @@ async def ingest_handler(campaign_id: str, payload: IngestRequest):
     entity_map: dict[str, str] = {}
 
     for entity in payload.entities:
+        normalized_type = normalize_entity_type(entity.type)
         created = create_entity(
             campaign_id,
-            entity.type,
+            normalized_type,
             entity.name,
             entity.properties,
             entity.metadata,
@@ -35,11 +37,12 @@ async def ingest_handler(campaign_id: str, payload: IngestRequest):
     for relationship in payload.relationships:
         from_id = resolve_entity_id(relationship.from_entity_name)
         to_id = resolve_entity_id(relationship.to_entity_name)
+        normalized_rel_type = normalize_relationship_type(relationship.type)
         created = create_relationship(
             campaign_id,
             from_id,
             to_id,
-            relationship.type,
+            normalized_rel_type,
             relationship.properties,
         )
         if not created:

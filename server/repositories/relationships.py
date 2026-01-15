@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from server.db.neo4j import get_session
-from server.repositories.utils import normalize_label
+from server.repositories.utils import relationship_to_dict, serialize_map
 
 
 def create_relationship(
@@ -14,8 +14,9 @@ def create_relationship(
     properties: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
     relationship_id = str(uuid4())
-    rel_type = normalize_label(relationship_type)
+    rel_type = relationship_type  # Already normalized by ingest API
     created_at = datetime.utcnow()
+    properties_payload = serialize_map(properties)
     query = (
         "MATCH (from:Entity {entity_id: $from_entity_id})-[:IN_CAMPAIGN]->"
         "(:Campaign {campaign_id: $campaign_id}) "
@@ -27,7 +28,7 @@ def create_relationship(
         "properties: $properties, "
         "created_at: $created_at, "
         "updated_at: $created_at "
-        "}}]->(to) "
+        "}]->(to) "
         "RETURN r"
     )
     with get_session() as session:
@@ -39,12 +40,12 @@ def create_relationship(
                 "to_entity_id": to_entity_id,
                 "relationship_id": relationship_id,
                 "relationship_type": relationship_type,
-                "properties": properties,
+                "properties": properties_payload,
                 "created_at": created_at,
             },
         )
         record = result.single()
-    return record["r"] if record else None
+    return relationship_to_dict(record["r"], ["properties"]) if record else None
 
 
 def list_relationships(
@@ -79,7 +80,7 @@ def list_relationships(
         result = session.run(query, params)
         return [
             {
-                **record["r"],
+                **relationship_to_dict(record["r"], ["properties"]),
                 "from_entity_id": record["from_entity_id"],
                 "to_entity_id": record["to_entity_id"],
             }

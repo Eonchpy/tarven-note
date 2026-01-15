@@ -23,9 +23,14 @@ async def paths_handler(
 @router.get("/subgraph", response_model=SubgraphResponse)
 async def subgraph_handler(
     campaign_id: str,
-    entity_id: str = Query(alias="entity_id"),
+    entity_id: str = Query(default=None, alias="entity_id"),
+    name: str = Query(default=None),
     depth: int = Query(default=2, ge=1, le=4),
 ):
     if entity_id in {"", "undefined", "null"}:
-        raise HTTPException(status_code=400, detail="entity_id required")
-    return get_subgraph(campaign_id, entity_id, depth)
+        entity_id = None
+    if name in {"", "undefined", "null"}:
+        name = None
+    if not entity_id and not name:
+        raise HTTPException(status_code=400, detail="entity_id or name required")
+    return get_subgraph(campaign_id, entity_id=entity_id, name=name, depth=depth)

@@ -27,7 +27,10 @@ def create_entity(
         "e.metadata = $metadata, "
         "e.created_at = $created_at, "
         "e.updated_at = $created_at "
-        "ON MATCH SET e.updated_at = $created_at "
+        "ON MATCH SET "
+        "e.properties = $properties, "
+        "e.metadata = $metadata, "
+        "e.updated_at = $created_at "
         "MERGE (e)-[:IN_CAMPAIGN]->(c) "
         "RETURN e"
     )

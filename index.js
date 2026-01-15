@@ -193,7 +193,7 @@ function registerTarvenNoteTools() {
   registerFunctionTool({
     name: "tarven_store_entities",
     displayName: "Tarven Store Entities",
-    description: "Store entities and relationships to knowledge graph.",
+    description: "Store or update entities and relationships. Supports upsert - same entity/relationship will be updated.",
     parameters: storeEntitiesSchema,
     action: async (params) => {
       if (!currentCampaignId) {
@@ -234,7 +234,7 @@ function registerTarvenNoteTools() {
       from_name: { type: "string", description: "路径起点名称" },
       to_name: { type: "string", description: "路径终点名称" },
       max_hops: { type: "number", description: "最大跳数" },
-      entity_id: { type: "string", description: "子图中心实体 ID" },
+      entity_id: { type: "string", description: "子图中心实体 ID (或用 entity_name)" },
       depth: { type: "number", description: "子图深度" }
     },
     required: ["query_type"]
@@ -283,11 +283,16 @@ function registerTarvenNoteTools() {
         }
         if (params.query_type === "subgraph") {
           const entityId = params.entity_id ?? "";
-          if (!entityId) {
-            return JSON.stringify({ success: false, error: "entity_id required" });
+          const entityName = params.entity_name ?? "";
+          if (!entityId && !entityName) {
+            return JSON.stringify({ success: false, error: "entity_id or entity_name required" });
           }
           const depth = params.depth ?? 2;
-          url += `/subgraph?entity_id=${encodeURIComponent(entityId)}&depth=${depth}`;
+          if (entityId) {
+            url += `/subgraph?entity_id=${encodeURIComponent(entityId)}&depth=${depth}`;
+          } else {
+            url += `/subgraph?name=${encodeURIComponent(entityName)}&depth=${depth}`;
+          }
         }
         const response = await fetch(url);
         const data = await response.json();

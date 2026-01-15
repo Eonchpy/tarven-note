@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from server.db.neo4j import get_session
 from server.repositories.utils import deserialize_map
@@ -46,32 +46,37 @@ def find_paths(
 
 def get_subgraph(
     campaign_id: str,
-    entity_id: str,
-    depth: int,
+    entity_id: Optional[str] = None,
+    name: Optional[str] = None,
+    depth: int = 2,
 ) -> Dict[str, List[Dict[str, Any]]]:
     depth = max(1, min(depth, 4))
+
+    # Build match clause based on provided parameter
+    if entity_id:
+        match_clause = "MATCH (center:Entity {entity_id: $entity_id})-[:IN_CAMPAIGN]->(:Campaign {campaign_id: $campaign_id})"
+        params = {"campaign_id": campaign_id, "entity_id": entity_id}
+    elif name:
+        match_clause = "MATCH (center:Entity {name: $name})-[:IN_CAMPAIGN]->(:Campaign {campaign_id: $campaign_id})"
+        params = {"campaign_id": campaign_id, "name": name}
+    else:
+        return {"nodes": [], "edges": []}
+
     query = (
-        "MATCH (center:Entity {entity_id: $entity_id})-[:IN_CAMPAIGN]->"
-        "(:Campaign {campaign_id: $campaign_id}) "
+        f"{match_clause} "
         "CALL {"
         "  WITH center "
         f"  MATCH path = (center)-[*1..{depth}]-(n:Entity) "
         "  RETURN path"
         "} "
-        "WITH collect(path) AS paths "
+        "WITH center, collect(path) AS paths "
         "UNWIND paths AS p "
         "UNWIND nodes(p) AS n "
         "UNWIND relationships(p) AS r "
-        "RETURN collect(DISTINCT n) AS nodes, collect(DISTINCT r) AS rels"
+        "RETURN collect(DISTINCT n) + collect(DISTINCT center) AS nodes, collect(DISTINCT r) AS rels"
     )
     with get_session() as session:
-        result = session.run(
-            query,
-            {
-                "campaign_id": campaign_id,
-                "entity_id": entity_id,
-            },
-        )
+        result = session.run(query, params)
         record = result.single()
         if not record:
             return {"nodes": [], "edges": []}

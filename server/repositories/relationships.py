@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from server.db.neo4j import get_session
-from server.repositories.utils import relationship_to_dict, serialize_map
+from server.repositories.utils import normalize_label, relationship_to_dict, serialize_map
 
 
 def create_relationship(
@@ -14,7 +14,7 @@ def create_relationship(
     properties: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
     relationship_id = str(uuid4())
-    rel_type = relationship_type  # Already normalized by ingest API
+    rel_type = normalize_label(relationship_type, prefix="REL", upper=True)
     created_at = datetime.utcnow()
     properties_payload = serialize_map(properties)
     query = (

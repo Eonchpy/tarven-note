@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from server.repositories.queries import find_paths, get_subgraph
 from server.schemas.paths import PathsResponse
@@ -14,6 +14,8 @@ async def paths_handler(
     to_name: str = Query(alias="to"),
     max_hops: int = Query(default=3, ge=1, le=6),
 ):
+    if from_name in {"", "undefined", "null"} or to_name in {"", "undefined", "null"}:
+        raise HTTPException(status_code=400, detail="from/to required")
     paths = find_paths(campaign_id, from_name, to_name, max_hops)
     return {"paths": paths}
 
@@ -24,4 +26,6 @@ async def subgraph_handler(
     entity_id: str = Query(alias="entity_id"),
     depth: int = Query(default=2, ge=1, le=4),
 ):
+    if entity_id in {"", "undefined", "null"}:
+        raise HTTPException(status_code=400, detail="entity_id required")
     return get_subgraph(campaign_id, entity_id, depth)

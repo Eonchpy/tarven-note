@@ -180,7 +180,7 @@ function registerTarvenNoteTools() {
             type: {
               type: "string",
               enum: ["KNOWS", "TRUSTS", "FEARS", "LOVES", "HATES", "LOCATED_AT", "WORKS_AT", "LIVES_AT", "PARTICIPATED_IN", "WITNESSED", "CAUSED", "OWNS", "USED", "FOUND", "BELONGS_TO", "CONNECTED_TO"],
-              description: "Relationship type - MUST use one of these exact values"
+              description: "Relationship type. Prefer English enum values for Neo4j label. Chinese types (接触, 知晓) will be stored in properties.type"
             },
             properties: { type: "object" }
           }
@@ -193,7 +193,7 @@ function registerTarvenNoteTools() {
   registerFunctionTool({
     name: "tarven_store_entities",
     displayName: "Tarven Store Entities",
-    description: "存储实体和关系到知识图谱",
+    description: "MUST call after narrating ANY new character, location, event, item, clue, or relationship. If you described it, store it immediately. Do not wait - store entities as soon as they appear in your narrative.",
     parameters: storeEntitiesSchema,
     action: async (params) => {
       if (!currentCampaignId) {

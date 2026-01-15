@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from server.db.neo4j import get_session
-from server.repositories.utils import normalize_label
+from server.repositories.utils import normalize_label, node_to_dict, serialize_map
 
 
 def create_entity(
@@ -14,8 +14,10 @@ def create_entity(
     metadata: Dict[str, Any],
 ) -> Dict[str, Any]:
     entity_id = str(uuid4())
-    label = normalize_label(entity_type)
+    label = normalize_label(entity_type, prefix="E", upper=False)
     created_at = datetime.utcnow()
+    properties_payload = serialize_map(properties)
+    metadata_payload = serialize_map(metadata)
     query = (
         "MATCH (c:Campaign {campaign_id: $campaign_id}) "
         f"MERGE (e:Entity:{label} {{ campaign_id: $campaign_id, name: $name, type: $entity_type }}) "
@@ -37,13 +39,13 @@ def create_entity(
                 "entity_id": entity_id,
                 "entity_type": entity_type,
                 "name": name,
-                "properties": properties,
-                "metadata": metadata,
+                "properties": properties_payload,
+                "metadata": metadata_payload,
                 "created_at": created_at,
             },
         )
         record = result.single()
-    return record["e"]
+    return node_to_dict(record["e"], ["properties", "metadata"])
 
 
 def list_entities(
@@ -68,7 +70,7 @@ def list_entities(
     )
     with get_session() as session:
         result = session.run(query, params)
-        return [record["e"] for record in result]
+        return [node_to_dict(record["e"], ["properties", "metadata"]) for record in result]
 
 
 def get_entity(campaign_id: str, entity_id: str) -> Optional[Dict[str, Any]]:
@@ -80,8 +82,7 @@ def get_entity(campaign_id: str, entity_id: str) -> Optional[Dict[str, Any]]:
     with get_session() as session:
         result = session.run(query, {"campaign_id": campaign_id, "entity_id": entity_id})
         record = result.single()
-    return record["e"] if record else None
-
+    return node_to_dict(record["e"], ["properties", "metadata"]) if record else None
 
 def get_entity_by_name(
     campaign_id: str,
@@ -103,8 +104,7 @@ def get_entity_by_name(
     with get_session() as session:
         result = session.run(query, params)
         record = result.single()
-    return record["e"] if record else None
-
+    return node_to_dict(record["e"], ["properties", "metadata"]) if record else None
 
 def update_entity(
     campaign_id: str,
@@ -112,6 +112,10 @@ def update_entity(
     updates: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
     updates["updated_at"] = datetime.utcnow()
+    if "properties" in updates:
+        updates["properties"] = serialize_map(updates["properties"])
+    if "metadata" in updates:
+        updates["metadata"] = serialize_map(updates["metadata"])
     query = (
         "MATCH (e:Entity {entity_id: $entity_id})-[:IN_CAMPAIGN]->"
         "(:Campaign {campaign_id: $campaign_id}) "
@@ -128,8 +132,7 @@ def update_entity(
             },
         )
         record = result.single()
-    return record["e"] if record else None
-
+    return node_to_dict(record["e"], ["properties", "metadata"]) if record else None
 
 def delete_entity(campaign_id: str, entity_id: str) -> bool:
     query = (

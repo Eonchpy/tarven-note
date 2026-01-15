@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from server.api.campaigns import router as campaigns_router
 from server.api.entities import router as entities_router
@@ -11,6 +12,14 @@ from server.db.neo4j import close_driver
 from server.db.schema import apply_schema
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(health_router)
 app.include_router(campaigns_router)

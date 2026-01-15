@@ -23,7 +23,7 @@ class CampaignResponse(BaseModel):
     campaign_id: str
     name: str
     system: str
-    description: Optional[str]
+    description: Optional[str] = None
     status: str
     metadata: Dict[str, Any]
     created_at: datetime

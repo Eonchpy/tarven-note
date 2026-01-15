@@ -28,6 +28,222 @@ function saveSettings() {
   localStorage.setItem(STORAGE_KEYS.enableTools, String(enableTools));
 }
 
+let visLoaded = false;
+
+async function loadVisJs() {
+  if (visLoaded) return;
+  return new Promise((resolve, reject) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://unpkg.com/vis-network@9.1.9/dist/dist/vis-network.min.css";
+    document.head.appendChild(link);
+
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js";
+    script.onload = () => {
+      visLoaded = true;
+      resolve();
+    };
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+function createGraphModal() {
+  const existing = document.getElementById("tarven_graph_modal");
+  if (existing) return existing;
+
+  const modal = document.createElement("div");
+  modal.id = "tarven_graph_modal";
+  modal.innerHTML = `
+    <div class="tarven-graph-overlay"></div>
+    <div class="tarven-graph-container">
+      <div class="tarven-graph-header">
+        <span>知识图谱</span>
+        <button id="tarven_graph_close" class="menu_button">×</button>
+      </div>
+      <div class="tarven-graph-controls">
+        <input id="tarven_graph_search" type="text" placeholder="输入实体名称搜索..." class="text_pole">
+        <button id="tarven_graph_search_btn" class="menu_button">搜索</button>
+        <button id="tarven_graph_full_btn" class="menu_button">全图</button>
+      </div>
+      <div id="tarven_graph_canvas"></div>
+      <div id="tarven_graph_info" class="tarven-graph-info"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  addGraphStyles();
+  return modal;
+}
+
+function addGraphStyles() {
+  if (document.getElementById("tarven_graph_styles")) return;
+  const style = document.createElement("style");
+  style.id = "tarven_graph_styles";
+  style.textContent = `
+    #tarven_graph_modal { display: none; }
+    #tarven_graph_modal.active { display: block; }
+    .tarven-graph-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); z-index: 9998;
+    }
+    .tarven-graph-container {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80vw; height: 80vh;
+      background: var(--SmartThemeBlurTintColor, #1a1a1a);
+      border-radius: 10px; z-index: 9999;
+      display: flex; flex-direction: column;
+    }
+    .tarven-graph-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 15px; border-bottom: 1px solid #444;
+    }
+    .tarven-graph-header span { font-size: 16px; font-weight: bold; }
+    .tarven-graph-controls {
+      display: flex; gap: 10px; padding: 10px 15px;
+    }
+    .tarven-graph-controls input { flex: 1; }
+    #tarven_graph_canvas { flex: 1; min-height: 0; }
+    .tarven-graph-info {
+      padding: 10px 15px; border-top: 1px solid #444;
+      max-height: 120px; overflow-y: auto; font-size: 13px;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+const NODE_COLORS = {
+  Character: "#e74c3c",
+  Location: "#3498db",
+  Event: "#9b59b6",
+  Clue: "#f39c12",
+  Item: "#2ecc71",
+  Organization: "#1abc9c",
+  Unknown: "#95a5a6"
+};
+
+async function fetchSubgraph(entityName, depth = 2) {
+  if (!currentCampaignId) return null;
+  const url = `${backendUrl}/api/campaigns/${currentCampaignId}/subgraph?name=${encodeURIComponent(entityName)}&depth=${depth}`;
+  const response = await fetch(url);
+  return response.json();
+}
+
+async function fetchAllEntities() {
+  if (!currentCampaignId) return [];
+  const url = `${backendUrl}/api/campaigns/${currentCampaignId}/entities`;
+  const response = await fetch(url);
+  return response.json();
+}
+
+let networkInstance = null;
+
+function renderGraph(data, container) {
+  const nodes = new vis.DataSet(
+    data.nodes.map(n => ({
+      id: n.id,
+      label: n.label,
+      title: `${n.type}: ${n.label}`,
+      color: NODE_COLORS[n.type] || NODE_COLORS.Unknown,
+      _data: n
+    }))
+  );
+
+  const edges = new vis.DataSet(
+    data.edges.map(e => ({
+      id: e.id,
+      from: e.from_id,
+      to: e.to_id,
+      label: e.type,
+      arrows: "to",
+      _data: e
+    }))
+  );
+
+  const options = {
+    nodes: {
+      shape: "dot",
+      size: 20,
+      font: { size: 14, color: "#fff" }
+    },
+    edges: {
+      font: { size: 11, color: "#aaa", strokeWidth: 0 },
+      color: { color: "#666", highlight: "#fff" }
+    },
+    physics: {
+      stabilization: { iterations: 100 }
+    }
+  };
+
+  if (networkInstance) {
+    networkInstance.destroy();
+  }
+  networkInstance = new vis.Network(container, { nodes, edges }, options);
+
+  networkInstance.on("click", (params) => {
+    const infoDiv = document.getElementById("tarven_graph_info");
+    if (params.nodes.length > 0) {
+      const node = nodes.get(params.nodes[0]);
+      const props = node._data.properties || {};
+      infoDiv.innerHTML = `<b>${node._data.type}: ${node.label}</b><br>` +
+        Object.entries(props).map(([k, v]) => `${k}: ${v}`).join("<br>");
+    } else if (params.edges.length > 0) {
+      const edge = edges.get(params.edges[0]);
+      const props = edge._data.properties || {};
+      infoDiv.innerHTML = `<b>关系: ${edge.label}</b><br>` +
+        Object.entries(props).map(([k, v]) => `${k}: ${v}`).join("<br>");
+    } else {
+      infoDiv.innerHTML = "";
+    }
+  });
+}
+
+async function openGraphModal() {
+  if (!currentCampaignId) {
+    alert("请先创建或选择一个战役");
+    return;
+  }
+
+  await loadVisJs();
+  const modal = createGraphModal();
+  modal.classList.add("active");
+
+  const canvas = document.getElementById("tarven_graph_canvas");
+  const searchInput = document.getElementById("tarven_graph_search");
+  const searchBtn = document.getElementById("tarven_graph_search_btn");
+  const fullBtn = document.getElementById("tarven_graph_full_btn");
+  const closeBtn = document.getElementById("tarven_graph_close");
+  const overlay = modal.querySelector(".tarven-graph-overlay");
+
+  const closeModal = () => modal.classList.remove("active");
+  closeBtn.onclick = closeModal;
+  overlay.onclick = closeModal;
+
+  searchBtn.onclick = async () => {
+    const name = searchInput.value.trim();
+    if (!name) return;
+    const data = await fetchSubgraph(name, 2);
+    if (data && data.nodes?.length > 0) {
+      renderGraph(data, canvas);
+    } else {
+      alert("未找到该实体");
+    }
+  };
+
+  fullBtn.onclick = async () => {
+    const entities = await fetchAllEntities();
+    if (entities.length === 0) {
+      alert("暂无数据");
+      return;
+    }
+    const data = await fetchSubgraph(entities[0].name, 4);
+    if (data) renderGraph(data, canvas);
+  };
+
+  fullBtn.click();
+}
+
 async function setupSettingsUI() {
   const settingsHtml = await renderExtensionTemplateAsync(TEMPLATE_PATH, "settings");
   const settingsContainer = document.getElementById("extensions_settings2");
@@ -53,6 +269,11 @@ async function setupSettingsUI() {
     saveSettings();
     registerTarvenNoteTools();
   });
+
+  const viewGraphBtn = document.getElementById("tarven_view_graph");
+  if (viewGraphBtn) {
+    viewGraphBtn.addEventListener("click", openGraphModal);
+  }
 }
 
 function registerTarvenNoteTools() {

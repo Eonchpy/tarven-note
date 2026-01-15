@@ -51,34 +51,49 @@ async function setupSettingsUI() {
     backendUrl = urlInput.value.trim() || "http://localhost:8000";
     enableTools = enableToggle.checked;
     saveSettings();
+    registerTarvenNoteTools();
   });
 }
 
 function registerTarvenNoteTools() {
-  if (!globalThis.SillyTavern?.registerToolFunction) {
-    console.warn("SillyTavern tool API not available");
+  const context = globalThis.SillyTavern?.getContext?.();
+  const registerFunctionTool = context?.registerFunctionTool;
+  const unregisterFunctionTool = context?.unregisterFunctionTool;
+  if (!registerFunctionTool || !unregisterFunctionTool) {
+    console.warn("SillyTavern function tool API not available");
     return;
   }
+
+  const toolNames = [
+    "tarven_create_campaign",
+    "tarven_store_entities",
+    "tarven_query"
+  ];
+  toolNames.forEach((name) => unregisterFunctionTool(name));
 
   if (!enableTools) {
     console.log("tarven-note tools disabled");
     return;
   }
 
-  globalThis.SillyTavern.registerToolFunction({
-    name: "tarven_create_campaign",
-    description: "创建新的 TRPG 战役",
-    parameters: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "战役名称" },
-        system: { type: "string", description: "规则系统 (COC7, DND5e, Cyberpunk等)" },
-        description: { type: "string", description: "战役描述" },
-        metadata: { type: "object", description: "元数据" }
-      },
-      required: ["name", "system"]
+  const createCampaignSchema = Object.freeze({
+    $schema: "http://json-schema.org/draft-04/schema#",
+    type: "object",
+    properties: {
+      name: { type: "string", description: "战役名称" },
+      system: { type: "string", description: "规则系统 (COC7, DND5e, Cyberpunk等)" },
+      description: { type: "string", description: "战役描述" },
+      metadata: { type: "object", description: "元数据" }
     },
-    handler: async (params) => {
+    required: ["name", "system"]
+  });
+
+  registerFunctionTool({
+    name: "tarven_create_campaign",
+    displayName: "Tarven Create Campaign",
+    description: "创建新的 TRPG 战役",
+    parameters: createCampaignSchema,
+    action: async (params) => {
       try {
         const response = await fetch(`${backendUrl}/api/campaigns`, {
           method: "POST",
@@ -87,55 +102,60 @@ function registerTarvenNoteTools() {
         });
         const data = await response.json();
         currentCampaignId = data.campaign_id;
-        return {
+        return JSON.stringify({
           success: true,
           campaign_id: data.campaign_id,
           message: `战役 \"${params.name}\" 创建成功`
-        };
+        });
       } catch (error) {
-        return { success: false, error: error.message };
+        return JSON.stringify({ success: false, error: error.message });
       }
-    }
+    },
+    formatMessage: () => ""
   });
 
-  globalThis.SillyTavern.registerToolFunction({
-    name: "tarven_store_entities",
-    description: "存储实体和关系到知识图谱",
-    parameters: {
-      type: "object",
-      properties: {
-        entities: {
-          type: "array",
-          description: "实体列表",
-          items: {
-            type: "object",
-            properties: {
-              type: { type: "string" },
-              name: { type: "string" },
-              properties: { type: "object" },
-              metadata: { type: "object" }
-            }
-          }
-        },
-        relationships: {
-          type: "array",
-          description: "关系列表",
-          items: {
-            type: "object",
-            properties: {
-              from_entity_name: { type: "string" },
-              to_entity_name: { type: "string" },
-              type: { type: "string" },
-              properties: { type: "object" }
-            }
+  const storeEntitiesSchema = Object.freeze({
+    $schema: "http://json-schema.org/draft-04/schema#",
+    type: "object",
+    properties: {
+      entities: {
+        type: "array",
+        description: "实体列表",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string" },
+            name: { type: "string" },
+            properties: { type: "object" },
+            metadata: { type: "object" }
           }
         }
       },
-      required: ["entities", "relationships"]
+      relationships: {
+        type: "array",
+        description: "关系列表",
+        items: {
+          type: "object",
+          properties: {
+            from_entity_name: { type: "string" },
+            to_entity_name: { type: "string" },
+            type: { type: "string" },
+            properties: { type: "object" }
+          }
+        }
+      }
     },
-    handler: async (params) => {
+    required: ["entities", "relationships"]
+  });
+
+  registerFunctionTool({
+    name: "tarven_store_entities",
+    displayName: "Tarven Store Entities",
+    description: "存储实体和关系到知识图谱",
+    parameters: storeEntitiesSchema,
+    action: async (params) => {
       if (!currentCampaignId) {
-        return { success: false, error: "No active campaign" };
+        return JSON.stringify({ success: false, error: "No active campaign" });
       }
       try {
         const response = await fetch(
@@ -147,35 +167,45 @@ function registerTarvenNoteTools() {
           }
         );
         const data = await response.json();
-        return { success: true, data };
+        return JSON.stringify({ success: true, data });
       } catch (error) {
-        return { success: false, error: error.message };
+        return JSON.stringify({ success: false, error: error.message });
       }
-    }
+    },
+    formatMessage: () => ""
   });
 
-  globalThis.SillyTavern.registerToolFunction({
-    name: "tarven_query",
-    description: "查询知识图谱中的实体、关系或路径",
-    parameters: {
-      type: "object",
-      properties: {
-        query_type: {
-          type: "string",
-          enum: ["entity", "relationship"],
-          description: "查询类型：entity(实体)、relationship(关系)"
-        },
-        entity_name: { type: "string", description: "实体名称" },
-        entity_type: { type: "string", description: "实体类型过滤" },
-        from_entity_id: { type: "string", description: "关系起点实体 ID" },
-        to_entity_id: { type: "string", description: "关系终点实体 ID" },
-        relationship_type: { type: "string", description: "关系类型过滤" }
+  const querySchema = Object.freeze({
+    $schema: "http://json-schema.org/draft-04/schema#",
+    type: "object",
+    properties: {
+      query_type: {
+        type: "string",
+        enum: ["entity", "relationship", "path", "subgraph"],
+        description: "查询类型"
       },
-      required: ["query_type"]
+      entity_name: { type: "string", description: "实体名称" },
+      entity_type: { type: "string", description: "实体类型过滤" },
+      from_entity_id: { type: "string", description: "关系起点实体 ID" },
+      to_entity_id: { type: "string", description: "关系终点实体 ID" },
+      relationship_type: { type: "string", description: "关系类型过滤" },
+      from_name: { type: "string", description: "路径起点名称" },
+      to_name: { type: "string", description: "路径终点名称" },
+      max_hops: { type: "number", description: "最大跳数" },
+      entity_id: { type: "string", description: "子图中心实体 ID" },
+      depth: { type: "number", description: "子图深度" }
     },
-    handler: async (params) => {
+    required: ["query_type"]
+  });
+
+  registerFunctionTool({
+    name: "tarven_query",
+    displayName: "Tarven Query",
+    description: "查询知识图谱中的实体、关系或路径",
+    parameters: querySchema,
+    action: async (params) => {
       if (!currentCampaignId) {
-        return { success: false, error: "No active campaign" };
+        return JSON.stringify({ success: false, error: "No active campaign" });
       }
       try {
         let url = `${backendUrl}/api/campaigns/${currentCampaignId}`;
@@ -200,13 +230,24 @@ function registerTarvenNoteTools() {
             url += `type=${encodeURIComponent(params.relationship_type)}`;
           }
         }
+        if (params.query_type === "path") {
+          const fromName = params.from_name ?? "";
+          const toName = params.to_name ?? "";
+          const maxHops = params.max_hops ?? 3;
+          url += `/paths?from=${encodeURIComponent(fromName)}&to=${encodeURIComponent(toName)}&max_hops=${maxHops}`;
+        }
+        if (params.query_type === "subgraph") {
+          const depth = params.depth ?? 2;
+          url += `/subgraph?entity_id=${encodeURIComponent(params.entity_id)}&depth=${depth}`;
+        }
         const response = await fetch(url);
         const data = await response.json();
-        return { success: true, data };
+        return JSON.stringify({ success: true, data });
       } catch (error) {
-        return { success: false, error: error.message };
+        return JSON.stringify({ success: false, error: error.message });
       }
-    }
+    },
+    formatMessage: () => ""
   });
 }
 

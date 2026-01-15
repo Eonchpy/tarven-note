@@ -193,7 +193,7 @@ function registerTarvenNoteTools() {
   registerFunctionTool({
     name: "tarven_store_entities",
     displayName: "Tarven Store Entities",
-    description: "MUST call after narrating ANY new character, location, event, item, clue, or relationship. If you described it, store it immediately. Do not wait - store entities as soon as they appear in your narrative.",
+    description: "Store entities and relationships to knowledge graph.",
     parameters: storeEntitiesSchema,
     action: async (params) => {
       if (!currentCampaignId) {
@@ -243,7 +243,7 @@ function registerTarvenNoteTools() {
   registerFunctionTool({
     name: "tarven_query",
     displayName: "Tarven Query",
-    description: "IMPORTANT: Query BEFORE generating narrative. When to query: 1) Player mentions any entity (character/location/item) 2) Player takes action - query current scene NPCs and items 3) During reasoning - query related entities. Rule: Query more when uncertain. Never fabricate if no results.",
+    description: "Query knowledge graph. Types: entity (by name/type), relationship (by entity IDs), path (between two entities), subgraph (around one entity).",
     parameters: querySchema,
     action: async (params) => {
       if (!currentCampaignId) {

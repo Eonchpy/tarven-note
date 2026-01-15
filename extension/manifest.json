@@ -1,0 +1,8 @@
+{
+  "display_name": "tarven-note",
+  "name": "tarven-note",
+  "version": "0.1.0",
+  "author": "tarven-note",
+  "description": "TRPG memory graph extension",
+  "entry": "index.js"
+}

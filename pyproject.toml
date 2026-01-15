@@ -1,0 +1,14 @@
+[project]
+name = "tarven-note"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi==0.115.6",
+    "httpx==0.27.2",
+    "neo4j==5.25.0",
+    "pydantic==2.8.2",
+    "pydantic-settings==2.5.2",
+    "uvicorn[standard]==0.30.6",
+]

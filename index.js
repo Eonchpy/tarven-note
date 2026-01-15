@@ -1,3 +1,8 @@
+import { renderExtensionTemplateAsync } from '../../../extensions.js';
+
+const MODULE_NAME = "tarven-note";
+const TEMPLATE_PATH = "third-party/tarven-note";
+
 const STORAGE_KEYS = {
   backendUrl: "tarven_note_backend_url",
   enableTools: "tarven_note_enable_tools"
@@ -23,7 +28,15 @@ function saveSettings() {
   localStorage.setItem(STORAGE_KEYS.enableTools, String(enableTools));
 }
 
-function setupSettingsUI() {
+async function setupSettingsUI() {
+  const settingsHtml = await renderExtensionTemplateAsync(TEMPLATE_PATH, "settings");
+  const settingsContainer = document.getElementById("extensions_settings2");
+  if (!settingsContainer) {
+    return;
+  }
+
+  $(settingsContainer).append(settingsHtml);
+
   const urlInput = document.getElementById("tarven_backend_url");
   const enableToggle = document.getElementById("tarven_enable_tools");
   const saveButton = document.getElementById("tarven_save_settings");
@@ -199,7 +212,7 @@ function registerTarvenNoteTools() {
 
 jQuery(async () => {
   loadSettings();
-  setupSettingsUI();
+  await setupSettingsUI();
   registerTarvenNoteTools();
   console.log("tarven-note tools registered");
 });

@@ -1,9 +1,11 @@
 {
   "display_name": "tarven-note",
-  "name": "tarven-note",
-  "version": "0.1.0",
+  "loading_order": 5,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
   "author": "tarven-note",
-  "description": "TRPG memory graph extension",
-  "entry": "index.js",
-  "settings": "settings.html"
+  "version": "0.1.0",
+  "homePage": "https://github.com/your-org/tarven-note",
+  "auto_update": true
 }

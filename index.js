@@ -1,9 +1,54 @@
-const TARVEN_NOTE_SERVER = "http://localhost:8000";
+const STORAGE_KEYS = {
+  backendUrl: "tarven_note_backend_url",
+  enableTools: "tarven_note_enable_tools"
+};
+
+let backendUrl = "http://localhost:8000";
+let enableTools = true;
 let currentCampaignId = null;
+
+function loadSettings() {
+  const storedUrl = localStorage.getItem(STORAGE_KEYS.backendUrl);
+  const storedEnable = localStorage.getItem(STORAGE_KEYS.enableTools);
+  if (storedUrl) {
+    backendUrl = storedUrl;
+  }
+  if (storedEnable !== null) {
+    enableTools = storedEnable === "true";
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem(STORAGE_KEYS.backendUrl, backendUrl);
+  localStorage.setItem(STORAGE_KEYS.enableTools, String(enableTools));
+}
+
+function setupSettingsUI() {
+  const urlInput = document.getElementById("tarven_backend_url");
+  const enableToggle = document.getElementById("tarven_enable_tools");
+  const saveButton = document.getElementById("tarven_save_settings");
+  if (!urlInput || !enableToggle || !saveButton) {
+    return;
+  }
+
+  urlInput.value = backendUrl;
+  enableToggle.checked = enableTools;
+
+  saveButton.addEventListener("click", () => {
+    backendUrl = urlInput.value.trim() || "http://localhost:8000";
+    enableTools = enableToggle.checked;
+    saveSettings();
+  });
+}
 
 function registerTarvenNoteTools() {
   if (!globalThis.SillyTavern?.registerToolFunction) {
     console.warn("SillyTavern tool API not available");
+    return;
+  }
+
+  if (!enableTools) {
+    console.log("tarven-note tools disabled");
     return;
   }
 
@@ -22,7 +67,7 @@ function registerTarvenNoteTools() {
     },
     handler: async (params) => {
       try {
-        const response = await fetch(`${TARVEN_NOTE_SERVER}/api/campaigns`, {
+        const response = await fetch(`${backendUrl}/api/campaigns`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(params)
@@ -81,7 +126,7 @@ function registerTarvenNoteTools() {
       }
       try {
         const response = await fetch(
-          `${TARVEN_NOTE_SERVER}/api/campaigns/${currentCampaignId}/ingest`,
+          `${backendUrl}/api/campaigns/${currentCampaignId}/ingest`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -120,7 +165,7 @@ function registerTarvenNoteTools() {
         return { success: false, error: "No active campaign" };
       }
       try {
-        let url = `${TARVEN_NOTE_SERVER}/api/campaigns/${currentCampaignId}`;
+        let url = `${backendUrl}/api/campaigns/${currentCampaignId}`;
         if (params.query_type === "entity") {
           url += `/entities?`;
           if (params.entity_name) {
@@ -153,6 +198,8 @@ function registerTarvenNoteTools() {
 }
 
 jQuery(async () => {
+  loadSettings();
+  setupSettingsUI();
   registerTarvenNoteTools();
   console.log("tarven-note tools registered");
 });

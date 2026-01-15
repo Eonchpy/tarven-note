@@ -4,7 +4,6 @@ from server.db.neo4j import get_session
 CONSTRAINT_NAMES = [
     "campaign_id_unique",
     "entity_id_unique",
-    "relationship_id_unique",
 ]
 
 INDEX_NAMES = [
@@ -12,13 +11,11 @@ INDEX_NAMES = [
     "entity_name_index",
     "entity_campaign_index",
     "entity_type_index",
-    "relationship_type_index",
 ]
 
 CONSTRAINTS = [
     "CREATE CONSTRAINT campaign_id_unique IF NOT EXISTS FOR (c:Campaign) REQUIRE c.campaign_id IS UNIQUE",
     "CREATE CONSTRAINT entity_id_unique IF NOT EXISTS FOR (e:Entity) REQUIRE e.entity_id IS UNIQUE",
-    "CREATE CONSTRAINT relationship_id_unique IF NOT EXISTS FOR ()-[r]-() REQUIRE r.relationship_id IS UNIQUE",
 ]
 
 INDEXES = [
@@ -26,7 +23,6 @@ INDEXES = [
     "CREATE INDEX entity_name_index IF NOT EXISTS FOR (e:Entity) ON (e.name)",
     "CREATE INDEX entity_campaign_index IF NOT EXISTS FOR (e:Entity) ON (e.campaign_id)",
     "CREATE INDEX entity_type_index IF NOT EXISTS FOR (e:Entity) ON (e.type)",
-    "CREATE INDEX relationship_type_index IF NOT EXISTS FOR ()-[r]-() ON (r.type)",
 ]
 
 

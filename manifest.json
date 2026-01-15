@@ -4,5 +4,6 @@
   "version": "0.1.0",
   "author": "tarven-note",
   "description": "TRPG memory graph extension",
-  "entry": "index.js"
+  "entry": "index.js",
+  "settings": "settings.html"
 }

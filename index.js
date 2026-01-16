@@ -127,6 +127,33 @@ function addGraphStyles() {
       padding: 10px 15px; border-top: 1px solid #444;
       max-height: 120px; overflow-y: auto; font-size: 13px;
     }
+    @media (max-width: 768px) {
+      .tarven-graph-container {
+        width: 95vw; height: 90vh;
+        border-radius: 5px;
+      }
+      .tarven-graph-header {
+        flex-wrap: wrap; gap: 5px;
+        padding: 8px 10px;
+      }
+      .tarven-graph-title {
+        flex-wrap: wrap; gap: 5px;
+        width: 100%;
+      }
+      .tarven-graph-title > span:first-child { font-size: 14px; }
+      .tarven-campaign-name { font-size: 12px; }
+      .tarven-graph-controls {
+        flex-wrap: wrap; gap: 5px;
+        padding: 8px 10px;
+      }
+      .tarven-graph-controls input {
+        flex: 1 1 100%; min-width: 0;
+      }
+      .tarven-graph-info {
+        max-height: 80px; font-size: 12px;
+        padding: 8px 10px;
+      }
+    }
   `;
   document.head.appendChild(style);
 }

@@ -269,8 +269,18 @@ async function setupSettingsUI() {
     saveSettings();
     registerTarvenNoteTools();
   });
+}
 
-  const viewGraphBtn = document.getElementById("tarven_view_graph");
+async function setupExtensionMenu() {
+  const buttonHtml = await renderExtensionTemplateAsync(TEMPLATE_PATH, "button");
+  const extensionsMenu = document.getElementById("extensionsMenu");
+  if (!extensionsMenu) {
+    return;
+  }
+
+  $(extensionsMenu).append(buttonHtml);
+
+  const viewGraphBtn = document.getElementById("tarven_view_graph_btn");
   if (viewGraphBtn) {
     viewGraphBtn.addEventListener("click", openGraphModal);
   }
@@ -529,6 +539,7 @@ function registerTarvenNoteTools() {
 jQuery(async () => {
   loadSettings();
   await setupSettingsUI();
+  await setupExtensionMenu();
   registerTarvenNoteTools();
   console.log("tarven-note tools registered");
 });

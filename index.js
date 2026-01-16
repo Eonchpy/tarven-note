@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
 let backendUrl = "http://localhost:8000";
 let enableTools = true;
 let currentCampaignId = null;
+let currentCampaignName = null;
 
 function loadSettings() {
   const storedUrl = localStorage.getItem(STORAGE_KEYS.backendUrl);
@@ -59,7 +60,11 @@ function createGraphModal() {
     <div class="tarven-graph-overlay"></div>
     <div class="tarven-graph-container">
       <div class="tarven-graph-header">
-        <span>知识图谱</span>
+        <div class="tarven-graph-title">
+          <span>知识图谱</span>
+          <span id="tarven_campaign_name" class="tarven-campaign-name"></span>
+          <button id="tarven_switch_campaign" class="menu_button">切换战役</button>
+        </div>
         <button id="tarven_graph_close" class="menu_button">×</button>
       </div>
       <div class="tarven-graph-controls">
@@ -99,7 +104,13 @@ function addGraphStyles() {
       display: flex; justify-content: space-between; align-items: center;
       padding: 10px 15px; border-bottom: 1px solid #444;
     }
-    .tarven-graph-header span { font-size: 16px; font-weight: bold; }
+    .tarven-graph-title {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .tarven-graph-title > span:first-child { font-size: 16px; font-weight: bold; }
+    .tarven-campaign-name {
+      font-size: 14px; font-weight: normal; color: #aaa;
+    }
     .tarven-graph-controls {
       display: flex; gap: 10px; padding: 10px 15px;
     }
@@ -233,41 +244,63 @@ async function fetchCampaigns() {
   return response.json();
 }
 
+async function selectCampaign() {
+  const campaigns = await fetchCampaigns();
+  if (!campaigns || campaigns.length === 0) {
+    alert("暂无战役，请先通过对话创建战役");
+    return false;
+  }
+  const options = campaigns.map((c, i) => `${i + 1}. ${c.name}`).join("\n");
+  const choice = prompt(`请选择战役:\n${options}\n\n输入序号:`);
+  if (!choice) return false;
+  const index = parseInt(choice) - 1;
+  if (index >= 0 && index < campaigns.length) {
+    currentCampaignId = campaigns[index].campaign_id;
+    currentCampaignName = campaigns[index].name;
+    return true;
+  } else {
+    alert("无效选择");
+    return false;
+  }
+}
+
 async function openGraphModal() {
   // 如果没有当前战役，尝试获取战役列表让用户选择
   if (!currentCampaignId) {
-    const campaigns = await fetchCampaigns();
-    if (!campaigns || campaigns.length === 0) {
-      alert("暂无战役，请先通过对话创建战役");
-      return;
-    }
-    // 让用户选择战役
-    const options = campaigns.map((c, i) => `${i + 1}. ${c.name}`).join("\n");
-    const choice = prompt(`请选择战役:\n${options}\n\n输入序号:`);
-    if (!choice) return;
-    const index = parseInt(choice) - 1;
-    if (index >= 0 && index < campaigns.length) {
-      currentCampaignId = campaigns[index].campaign_id;
-    } else {
-      alert("无效选择");
-      return;
-    }
+    const selected = await selectCampaign();
+    if (!selected) return;
   }
 
   await loadVisJs();
   const modal = createGraphModal();
   modal.classList.add("active");
 
+  // 显示当前战役名称
+  const campaignNameSpan = document.getElementById("tarven_campaign_name");
+  if (campaignNameSpan && currentCampaignName) {
+    campaignNameSpan.textContent = `- ${currentCampaignName}`;
+  }
+
   const canvas = document.getElementById("tarven_graph_canvas");
   const searchInput = document.getElementById("tarven_graph_search");
   const searchBtn = document.getElementById("tarven_graph_search_btn");
   const fullBtn = document.getElementById("tarven_graph_full_btn");
   const closeBtn = document.getElementById("tarven_graph_close");
+  const switchBtn = document.getElementById("tarven_switch_campaign");
   const overlay = modal.querySelector(".tarven-graph-overlay");
 
   const closeModal = () => modal.classList.remove("active");
   closeBtn.onclick = closeModal;
   overlay.onclick = closeModal;
+
+  // 切换战役
+  switchBtn.onclick = async () => {
+    const selected = await selectCampaign();
+    if (selected) {
+      campaignNameSpan.textContent = `- ${currentCampaignName}`;
+      fullBtn.click();
+    }
+  };
 
   searchBtn.onclick = async () => {
     const name = searchInput.value.trim();

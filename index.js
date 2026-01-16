@@ -199,10 +199,31 @@ function renderGraph(data, container) {
   });
 }
 
+async function fetchCampaigns() {
+  const url = `${backendUrl}/api/campaigns`;
+  const response = await fetch(url);
+  return response.json();
+}
+
 async function openGraphModal() {
+  // 如果没有当前战役，尝试获取战役列表让用户选择
   if (!currentCampaignId) {
-    alert("请先创建或选择一个战役");
-    return;
+    const campaigns = await fetchCampaigns();
+    if (!campaigns || campaigns.length === 0) {
+      alert("暂无战役，请先通过对话创建战役");
+      return;
+    }
+    // 让用户选择战役
+    const options = campaigns.map((c, i) => `${i + 1}. ${c.name}`).join("\n");
+    const choice = prompt(`请选择战役:\n${options}\n\n输入序号:`);
+    if (!choice) return;
+    const index = parseInt(choice) - 1;
+    if (index >= 0 && index < campaigns.length) {
+      currentCampaignId = campaigns[index].campaign_id;
+    } else {
+      alert("无效选择");
+      return;
+    }
   }
 
   await loadVisJs();

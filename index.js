@@ -140,6 +140,7 @@ async function fetchAllEntities() {
 let networkInstance = null;
 
 function renderGraph(data, container) {
+  console.log("renderGraph called, container:", container);
   // 清理旧实例和DOM
   if (networkInstance) {
     networkInstance.destroy();
@@ -147,8 +148,25 @@ function renderGraph(data, container) {
   }
   container.innerHTML = "";
 
+  // 去重节点
+  const seenNodeIds = new Set();
+  const uniqueNodes = data.nodes.filter(n => {
+    if (seenNodeIds.has(n.id)) return false;
+    seenNodeIds.add(n.id);
+    return true;
+  });
+
+  // 去重边
+  const seenEdgeIds = new Set();
+  const uniqueEdges = data.edges.filter(e => {
+    if (seenEdgeIds.has(e.id)) return false;
+    seenEdgeIds.add(e.id);
+    return true;
+  });
+
+  console.log("Creating nodes DataSet...");
   const nodes = new vis.DataSet(
-    data.nodes.map(n => ({
+    uniqueNodes.map(n => ({
       id: n.id,
       label: n.label,
       title: `${n.type}: ${n.label}`,
@@ -156,9 +174,11 @@ function renderGraph(data, container) {
       _data: n
     }))
   );
+  console.log("Nodes created:", nodes.length);
 
+  console.log("Creating edges DataSet...");
   const edges = new vis.DataSet(
-    data.edges.map(e => ({
+    uniqueEdges.map(e => ({
       id: e.id,
       from: e.from_id,
       to: e.to_id,
@@ -167,6 +187,7 @@ function renderGraph(data, container) {
       _data: e
     }))
   );
+  console.log("Edges created:", edges.length);
 
   const options = {
     nodes: {
@@ -251,8 +272,11 @@ async function openGraphModal() {
   searchBtn.onclick = async () => {
     const name = searchInput.value.trim();
     if (!name) return;
+    console.log("Searching for:", name);
     const data = await fetchSubgraph(name, 2);
+    console.log("Subgraph data:", data);
     if (data && data.nodes?.length > 0) {
+      console.log("Rendering graph with", data.nodes.length, "nodes and", data.edges?.length, "edges");
       renderGraph(data, canvas);
     } else {
       alert("未找到该实体");

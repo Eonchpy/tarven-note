@@ -1,7 +1,10 @@
+import logging
 from typing import Any, Dict, List, Optional
 
 from server.db.neo4j import get_session
 from server.repositories.utils import deserialize_map
+
+logger = logging.getLogger(__name__)
 
 
 def find_paths(
@@ -50,6 +53,7 @@ def get_subgraph(
     name: Optional[str] = None,
     depth: int = 2,
 ) -> Dict[str, List[Dict[str, Any]]]:
+    logger.info(f"get_subgraph called: campaign_id={campaign_id}, entity_id={entity_id}, name={name}, depth={depth}")
     depth = max(1, min(depth, 4))
 
     # Build match clause based on provided parameter
@@ -75,11 +79,17 @@ def get_subgraph(
         "WITH center, allRels, collect(DISTINCT n) AS nodes "
         "RETURN nodes, allRels AS rels"
     )
+    logger.info(f"Query: {query}")
+    logger.info(f"Params: {params}")
     with get_session() as session:
         result = session.run(query, params)
         record = result.single()
         if not record:
+            logger.info("No record returned from query")
             return {"nodes": [], "edges": []}
+
+        logger.info(f"Raw record nodes count: {len(record['nodes'])}")
+        logger.info(f"Raw record rels count: {len(record['rels'])}")
 
         nodes = [
             {
@@ -102,4 +112,5 @@ def get_subgraph(
             for rel in record["rels"]
             if rel.get("relationship_id")
         ]
+        logger.info(f"Processed nodes count: {len(nodes)}, edges count: {len(edges)}")
         return {"nodes": nodes, "edges": edges}

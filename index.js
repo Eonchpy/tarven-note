@@ -105,14 +105,14 @@ function addGraphStyles() {
       padding: 10px 15px; border-bottom: 1px solid #444;
     }
     .tarven-graph-title {
-      display: flex; align-items: center; gap: 10px;
+      display: flex; flex-direction: row; align-items: center; gap: 10px;
     }
     .tarven-graph-title > span:first-child { font-size: 16px; font-weight: bold; }
     .tarven-campaign-name {
       font-size: 14px; font-weight: normal; color: #aaa;
     }
     .tarven-graph-controls {
-      display: flex; gap: 10px; padding: 10px 15px;
+      display: flex; flex-direction: row; gap: 10px; padding: 10px 15px;
     }
     .tarven-graph-controls input { flex: 1; }
     #tarven_graph_canvas { flex: 1; min-height: 0; }

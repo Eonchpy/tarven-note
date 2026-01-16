@@ -115,6 +115,9 @@ function addGraphStyles() {
       display: flex; flex-direction: row; gap: 10px; padding: 10px 15px;
     }
     .tarven-graph-controls input { flex: 1; }
+    #tarven_graph_modal .menu_button {
+      display: inline-flex; flex-direction: row; align-items: center;
+    }
     #tarven_graph_canvas { flex: 1; min-height: 0; }
     .tarven-graph-info {
       padding: 10px 15px; border-top: 1px solid #444;

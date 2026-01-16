@@ -165,6 +165,7 @@ const NODE_COLORS = {
   Clue: "#f39c12",
   Item: "#2ecc71",
   Organization: "#1abc9c",
+  Skill: "#e91e63",
   Unknown: "#95a5a6"
 };
 
@@ -516,7 +517,7 @@ function registerTarvenNoteTools() {
           properties: {
             type: {
               type: "string",
-              enum: ["Character", "Location", "Event", "Clue", "Item", "Organization"],
+              enum: ["Character", "Location", "Event", "Clue", "Item", "Organization", "Skill"],
               description: "Entity type - MUST use one of these exact values"
             },
             name: { type: "string" },

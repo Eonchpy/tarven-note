@@ -140,6 +140,13 @@ async function fetchAllEntities() {
 let networkInstance = null;
 
 function renderGraph(data, container) {
+  // 清理旧实例和DOM
+  if (networkInstance) {
+    networkInstance.destroy();
+    networkInstance = null;
+  }
+  container.innerHTML = "";
+
   const nodes = new vis.DataSet(
     data.nodes.map(n => ({
       id: n.id,

@@ -64,16 +64,16 @@ def get_subgraph(
 
     query = (
         f"{match_clause} "
-        "CALL {"
-        "  WITH center "
-        f"  MATCH path = (center)-[*1..{depth}]-(n:Entity) "
-        "  RETURN path"
-        "} "
+        "OPTIONAL MATCH path = (center)-[*1.." + str(depth) + "]-(n:Entity) "
         "WITH center, collect(path) AS paths "
-        "UNWIND paths AS p "
-        "UNWIND nodes(p) AS n "
-        "UNWIND relationships(p) AS r "
-        "RETURN collect(DISTINCT n) + collect(DISTINCT center) AS nodes, collect(DISTINCT r) AS rels"
+        "WITH center, paths, "
+        "CASE WHEN size(paths) = 0 THEN [center] "
+        "ELSE reduce(acc = [], p IN paths | acc + nodes(p)) + [center] END AS allNodes, "
+        "CASE WHEN size(paths) = 0 THEN [] "
+        "ELSE reduce(acc = [], p IN paths | acc + relationships(p)) END AS allRels "
+        "UNWIND allNodes AS n "
+        "WITH center, allRels, collect(DISTINCT n) AS nodes "
+        "RETURN nodes, allRels AS rels"
     )
     with get_session() as session:
         result = session.run(query, params)

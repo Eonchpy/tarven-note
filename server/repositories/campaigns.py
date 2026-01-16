@@ -87,6 +87,15 @@ def update_campaign(
 
 def delete_campaign(campaign_id: str) -> bool:
     with get_session() as session:
+        # 先删除所有关联的实体及其关系
+        session.run(
+            """
+            MATCH (e:Entity)-[:IN_CAMPAIGN]->(:Campaign {campaign_id: $campaign_id})
+            DETACH DELETE e
+            """,
+            {"campaign_id": campaign_id},
+        )
+        # 再删除战役节点
         result = session.run(
             """
             MATCH (c:Campaign {campaign_id: $campaign_id})

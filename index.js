@@ -257,7 +257,10 @@ async function selectCampaign() {
     alert("暂无战役，请先通过对话创建战役");
     return false;
   }
-  const options = campaigns.map((c, i) => `${i + 1}. ${c.name}`).join("\n");
+  const options = campaigns.map((c, i) => {
+    const date = c.created_at ? new Date(c.created_at).toLocaleString() : "";
+    return `${i + 1}. ${c.name} (${date})`;
+  }).join("\n");
   const choice = prompt(`请选择战役:\n${options}\n\n输入序号:`);
   if (!choice) return false;
   const index = parseInt(choice) - 1;

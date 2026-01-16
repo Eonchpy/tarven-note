@@ -116,8 +116,11 @@ function addGraphStyles() {
     }
     .tarven-graph-controls input { flex: 1; }
     #tarven_graph_modal .menu_button {
-      display: inline-flex; flex-direction: row; align-items: center;
-      white-space: nowrap;
+      display: inline-flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      white-space: nowrap !important;
+      writing-mode: horizontal-tb !important;
     }
     #tarven_graph_canvas { flex: 1; min-height: 0; }
     .tarven-graph-info {

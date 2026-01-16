@@ -272,6 +272,9 @@ async function selectCampaign() {
 }
 
 async function openGraphModal() {
+  // 确保样式已加载
+  addGraphStyles();
+
   // 如果没有当前战役，尝试获取战役列表让用户选择
   if (!currentCampaignId) {
     const selected = await selectCampaign();

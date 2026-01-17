@@ -105,6 +105,7 @@ function addGraphStyles() {
       background: var(--SmartThemeBlurTintColor, #1a1a1a);
       border-radius: 10px; z-index: 9999;
       display: flex; flex-direction: column;
+      overflow: hidden;
     }
     .tarven-graph-header {
       display: flex; justify-content: space-between; align-items: center;
@@ -258,6 +259,25 @@ async function fetchAllEntities() {
 
 let networkInstance = null;
 
+function formatValue(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  if (typeof value === 'object') {
+    // Format nested object as key-value pairs
+    let html = '<div style="margin-left: 15px;">';
+    for (const [k, v] of Object.entries(value)) {
+      html += `<div style="margin: 3px 0;"><span style="color: #888;">${k}:</span> ${v}</div>`;
+    }
+    html += '</div>';
+    return html;
+  }
+  return value;
+}
+
 function formatEntityDetails(node) {
   const props = node._data.properties || {};
   const typeColor = NODE_COLORS[node._data.type] || NODE_COLORS.Unknown;
@@ -287,7 +307,7 @@ function formatEntityDetails(node) {
     html += '<div class="tarven-property-group">';
     html += '<div class="tarven-property-label">属性</div>';
     for (const [key, value] of Object.entries(regularProps)) {
-      html += `<div class="tarven-property-value"><strong>${key}:</strong> ${value}</div>`;
+      html += `<div class="tarven-property-value"><strong>${key}:</strong> ${formatValue(value)}</div>`;
     }
     html += '</div>';
   }
@@ -483,7 +503,8 @@ async function openGraphModal() {
   // 侧边面板关闭按钮
   const sidePanelCloseBtn = document.getElementById("tarven_side_panel_close");
   if (sidePanelCloseBtn) {
-    sidePanelCloseBtn.onclick = () => {
+    sidePanelCloseBtn.onclick = (e) => {
+      e.stopPropagation();
       const sidePanel = document.getElementById("tarven_graph_side_panel");
       sidePanel.classList.remove("active");
     };
@@ -673,7 +694,7 @@ function registerTarvenNoteTools() {
             type: {
               type: "string",
               enum: ["Character", "Location", "Event", "Clue", "Item", "Organization", "Skill"],
-              description: "Entity type - MUST use one of these exact values"
+              description: "Entity type - MUST use one of these exact values. Note: For character skills (技能值), use properties field (e.g., properties.skills = {斧头: 60}). Skill entity type is for creating independent skill nodes."
             },
             name: { type: "string" },
             properties: {

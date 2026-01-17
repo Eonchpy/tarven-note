@@ -52,8 +52,8 @@ def create_entity(
     label = normalize_label(entity_type, prefix="E", upper=False)
     created_at = datetime.utcnow()
 
-    # Check if entity already exists
-    existing = get_entity_by_name(campaign_id, name, entity_type)
+    # Check if entity already exists (by name only, not type)
+    existing = get_entity_by_name(campaign_id, name)
 
     if existing:
         # Entity exists - use smart_merge
@@ -61,27 +61,35 @@ def create_entity(
         merged_props = smart_merge(existing.get("properties", {}), properties)
         merged_meta = smart_merge(existing.get("metadata", {}), metadata)
         is_new = False
+        # Allow type update if current type is "Unknown"
+        should_update_type = existing.get("type") == "Unknown"
     else:
         # New entity
         entity_id = str(uuid4())
         merged_props = properties
         merged_meta = metadata
         is_new = True
+        should_update_type = True
 
     # Serialize properties and metadata to JSON strings
     properties_payload = serialize_map(merged_props)
     metadata_payload = serialize_map(merged_meta)
 
-    # Build query
+    # Build query - MERGE only on campaign_id and name (not type)
+    # Use base Entity label to match regardless of type-specific label
     query = (
         "MATCH (c:Campaign {campaign_id: $campaign_id}) "
-        f"MERGE (e:Entity:{label} {{ campaign_id: $campaign_id, name: $name, type: $entity_type }}) "
+        "MERGE (e:Entity { campaign_id: $campaign_id, name: $name }) "
         "SET "
         "e.entity_id = $entity_id, "
         "e.properties = $properties, "
         "e.metadata = $metadata, "
         "e.updated_at = $updated_at"
     )
+
+    # Update type if it's a new entity or if upgrading from "Unknown"
+    if should_update_type:
+        query += ", e.type = $entity_type "
 
     if is_new:
         query += ", e.created_at = $created_at "

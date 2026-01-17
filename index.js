@@ -105,7 +105,6 @@ function addGraphStyles() {
       background: var(--SmartThemeBlurTintColor, #1a1a1a);
       border-radius: 10px; z-index: 9999;
       display: flex; flex-direction: column;
-      position: relative;
     }
     .tarven-graph-header {
       display: flex; justify-content: space-between; align-items: center;

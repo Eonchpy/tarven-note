@@ -72,14 +72,13 @@ function createGraphModal() {
         <button id="tarven_graph_search_btn" class="menu_button">搜索</button>
         <button id="tarven_graph_full_btn" class="menu_button">全图</button>
       </div>
-      <div id="tarven_graph_canvas">
-        <div id="tarven_graph_side_panel" class="tarven-graph-side-panel">
-          <div class="tarven-graph-side-panel-header">
-            <span>实体详情</span>
-            <button id="tarven_side_panel_close" class="menu_button">×</button>
-          </div>
-          <div id="tarven_side_panel_content" class="tarven-graph-side-panel-content"></div>
+      <div id="tarven_graph_canvas"></div>
+      <div id="tarven_graph_side_panel" class="tarven-graph-side-panel">
+        <div class="tarven-graph-side-panel-header">
+          <span>实体详情</span>
+          <button id="tarven_side_panel_close" class="menu_button">×</button>
         </div>
+        <div id="tarven_side_panel_content" class="tarven-graph-side-panel-content"></div>
       </div>
     </div>
   `;
@@ -106,6 +105,7 @@ function addGraphStyles() {
       background: var(--SmartThemeBlurTintColor, #1a1a1a);
       border-radius: 10px; z-index: 9999;
       display: flex; flex-direction: column;
+      position: relative;
     }
     .tarven-graph-header {
       display: flex; justify-content: space-between; align-items: center;
@@ -131,7 +131,6 @@ function addGraphStyles() {
     }
     #tarven_graph_canvas {
       flex: 1; min-height: 0;
-      position: relative;
     }
     .tarven-graph-side-panel {
       position: absolute;

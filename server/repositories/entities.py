@@ -68,6 +68,10 @@ def create_entity(
         merged_meta = metadata
         is_new = True
 
+    # Serialize properties and metadata to JSON strings
+    properties_payload = serialize_map(merged_props)
+    metadata_payload = serialize_map(merged_meta)
+
     # Build query
     query = (
         "MATCH (c:Campaign {campaign_id: $campaign_id}) "
@@ -92,8 +96,8 @@ def create_entity(
                 "entity_id": entity_id,
                 "entity_type": entity_type,
                 "name": name,
-                "properties": merged_props,
-                "metadata": merged_meta,
+                "properties": properties_payload,
+                "metadata": metadata_payload,
                 "created_at": created_at,
                 "updated_at": created_at,
             },

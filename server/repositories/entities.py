@@ -5,6 +5,42 @@ from uuid import uuid4
 from server.db.neo4j import get_session
 from server.repositories.utils import normalize_label, node_to_dict, serialize_map
 
+# Fields that should append to list instead of overwrite
+APPEND_FIELDS = {"alias", "used_name", "note"}
+
+
+def smart_merge(
+    old_props: Dict[str, Any],
+    new_props: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Merge properties with smart handling for list fields.
+
+    - For fields in APPEND_FIELDS: append to list
+    - For other fields: overwrite
+    """
+    result = dict(old_props)
+
+    for key, new_value in new_props.items():
+        if key in APPEND_FIELDS:
+            # List append behavior
+            old_value = result.get(key, [])
+
+            # Ensure old_value is a list
+            if not isinstance(old_value, list):
+                old_value = [old_value] if old_value else []
+
+            # Append new value(s)
+            if isinstance(new_value, list):
+                result[key] = old_value + new_value
+            else:
+                result[key] = old_value + [new_value]
+        else:
+            # Overwrite behavior
+            result[key] = new_value
+
+    return result
+
 
 def create_entity(
     campaign_id: str,
@@ -13,27 +49,41 @@ def create_entity(
     properties: Dict[str, Any],
     metadata: Dict[str, Any],
 ) -> Dict[str, Any]:
-    entity_id = str(uuid4())
     label = normalize_label(entity_type, prefix="E", upper=False)
     created_at = datetime.utcnow()
-    properties_payload = serialize_map(properties)
-    metadata_payload = serialize_map(metadata)
+
+    # Check if entity already exists
+    existing = get_entity_by_name(campaign_id, name, entity_type)
+
+    if existing:
+        # Entity exists - use smart_merge
+        entity_id = existing["entity_id"]
+        merged_props = smart_merge(existing.get("properties", {}), properties)
+        merged_meta = smart_merge(existing.get("metadata", {}), metadata)
+        is_new = False
+    else:
+        # New entity
+        entity_id = str(uuid4())
+        merged_props = properties
+        merged_meta = metadata
+        is_new = True
+
+    # Build query
     query = (
         "MATCH (c:Campaign {campaign_id: $campaign_id}) "
         f"MERGE (e:Entity:{label} {{ campaign_id: $campaign_id, name: $name, type: $entity_type }}) "
-        "ON CREATE SET "
+        "SET "
         "e.entity_id = $entity_id, "
         "e.properties = $properties, "
         "e.metadata = $metadata, "
-        "e.created_at = $created_at, "
-        "e.updated_at = $created_at "
-        "ON MATCH SET "
-        "e.properties = coalesce(e.properties, {}) + $properties, "
-        "e.metadata = coalesce(e.metadata, {}) + $metadata, "
-        "e.updated_at = $created_at "
-        "MERGE (e)-[:IN_CAMPAIGN]->(c) "
-        "RETURN e"
+        "e.updated_at = $updated_at"
     )
+
+    if is_new:
+        query += ", e.created_at = $created_at "
+
+    query += " MERGE (e)-[:IN_CAMPAIGN]->(c) RETURN e"
+
     with get_session() as session:
         result = session.run(
             query,
@@ -42,9 +92,10 @@ def create_entity(
                 "entity_id": entity_id,
                 "entity_type": entity_type,
                 "name": name,
-                "properties": properties_payload,
-                "metadata": metadata_payload,
+                "properties": merged_props,
+                "metadata": merged_meta,
                 "created_at": created_at,
+                "updated_at": created_at,
             },
         )
         record = result.single()

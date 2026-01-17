@@ -72,8 +72,15 @@ function createGraphModal() {
         <button id="tarven_graph_search_btn" class="menu_button">搜索</button>
         <button id="tarven_graph_full_btn" class="menu_button">全图</button>
       </div>
-      <div id="tarven_graph_canvas"></div>
-      <div id="tarven_graph_info" class="tarven-graph-info"></div>
+      <div id="tarven_graph_canvas">
+        <div id="tarven_graph_side_panel" class="tarven-graph-side-panel">
+          <div class="tarven-graph-side-panel-header">
+            <span>实体详情</span>
+            <button id="tarven_side_panel_close" class="menu_button">×</button>
+          </div>
+          <div id="tarven_side_panel_content" class="tarven-graph-side-panel-content"></div>
+        </div>
+      </div>
     </div>
   `;
   document.body.appendChild(modal);
@@ -122,10 +129,78 @@ function addGraphStyles() {
       white-space: nowrap !important;
       writing-mode: horizontal-tb !important;
     }
-    #tarven_graph_canvas { flex: 1; min-height: 0; }
-    .tarven-graph-info {
-      padding: 10px 15px; border-top: 1px solid #444;
-      max-height: 120px; overflow-y: auto; font-size: 13px;
+    #tarven_graph_canvas {
+      flex: 1; min-height: 0;
+      position: relative;
+    }
+    .tarven-graph-side-panel {
+      position: absolute;
+      top: 0;
+      right: -350px;
+      width: 350px;
+      height: 100%;
+      background: var(--SmartThemeBlurTintColor, #1a1a1a);
+      border-left: 1px solid #444;
+      transition: right 0.3s ease;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+    }
+    .tarven-graph-side-panel.active {
+      right: 0;
+    }
+    .tarven-graph-side-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 15px;
+      border-bottom: 1px solid #444;
+      font-weight: bold;
+    }
+    .tarven-graph-side-panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      font-size: 13px;
+    }
+    .tarven-entity-name {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    .tarven-entity-type {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      margin-bottom: 15px;
+    }
+    .tarven-property-group {
+      margin-bottom: 15px;
+    }
+    .tarven-property-label {
+      color: #888;
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .tarven-property-value {
+      color: #ddd;
+      margin-bottom: 8px;
+    }
+    .tarven-property-list {
+      list-style: none;
+      padding-left: 0;
+    }
+    .tarven-property-list li {
+      padding: 4px 0;
+      color: #ddd;
+    }
+    .tarven-property-list li:before {
+      content: "• ";
+      color: #666;
+      margin-right: 5px;
     }
     @media (max-width: 768px) {
       .tarven-graph-container {
@@ -184,6 +259,79 @@ async function fetchAllEntities() {
 }
 
 let networkInstance = null;
+
+function formatEntityDetails(node) {
+  const props = node._data.properties || {};
+  const typeColor = NODE_COLORS[node._data.type] || NODE_COLORS.Unknown;
+
+  let html = `
+    <div class="tarven-entity-name">${node.label}</div>
+    <div class="tarven-entity-type" style="background-color: ${typeColor};">${node._data.type}</div>
+  `;
+
+  // List fields that should be displayed as lists
+  const listFields = ['alias', 'used_name', 'note'];
+
+  // Separate list fields from regular fields
+  const regularProps = {};
+  const listProps = {};
+
+  for (const [key, value] of Object.entries(props)) {
+    if (listFields.includes(key)) {
+      listProps[key] = value;
+    } else {
+      regularProps[key] = value;
+    }
+  }
+
+  // Display regular properties
+  if (Object.keys(regularProps).length > 0) {
+    html += '<div class="tarven-property-group">';
+    html += '<div class="tarven-property-label">属性</div>';
+    for (const [key, value] of Object.entries(regularProps)) {
+      html += `<div class="tarven-property-value"><strong>${key}:</strong> ${value}</div>`;
+    }
+    html += '</div>';
+  }
+
+  // Display list properties
+  for (const [key, value] of Object.entries(listProps)) {
+    html += '<div class="tarven-property-group">';
+    html += `<div class="tarven-property-label">${key}</div>`;
+
+    if (Array.isArray(value)) {
+      html += '<ul class="tarven-property-list">';
+      value.forEach(item => {
+        html += `<li>${item}</li>`;
+      });
+      html += '</ul>';
+    } else {
+      html += `<div class="tarven-property-value">${value}</div>`;
+    }
+    html += '</div>';
+  }
+
+  return html;
+}
+
+function formatRelationshipDetails(edge) {
+  const props = edge._data.properties || {};
+
+  let html = `
+    <div class="tarven-entity-name">关系: ${edge.label}</div>
+  `;
+
+  if (Object.keys(props).length > 0) {
+    html += '<div class="tarven-property-group">';
+    html += '<div class="tarven-property-label">属性</div>';
+    for (const [key, value] of Object.entries(props)) {
+      html += `<div class="tarven-property-value"><strong>${key}:</strong> ${value}</div>`;
+    }
+    html += '</div>';
+  }
+
+  return html;
+}
 
 function renderGraph(data, container) {
   console.log("renderGraph called, container:", container);
@@ -256,19 +404,19 @@ function renderGraph(data, container) {
   networkInstance = new vis.Network(container, { nodes, edges }, options);
 
   networkInstance.on("click", (params) => {
-    const infoDiv = document.getElementById("tarven_graph_info");
+    const sidePanel = document.getElementById("tarven_graph_side_panel");
+    const sidePanelContent = document.getElementById("tarven_side_panel_content");
+
     if (params.nodes.length > 0) {
       const node = nodes.get(params.nodes[0]);
-      const props = node._data.properties || {};
-      infoDiv.innerHTML = `<b>${node._data.type}: ${node.label}</b><br>` +
-        Object.entries(props).map(([k, v]) => `${k}: ${v}`).join("<br>");
+      sidePanelContent.innerHTML = formatEntityDetails(node);
+      sidePanel.classList.add("active");
     } else if (params.edges.length > 0) {
       const edge = edges.get(params.edges[0]);
-      const props = edge._data.properties || {};
-      infoDiv.innerHTML = `<b>关系: ${edge.label}</b><br>` +
-        Object.entries(props).map(([k, v]) => `${k}: ${v}`).join("<br>");
+      sidePanelContent.innerHTML = formatRelationshipDetails(edge);
+      sidePanel.classList.add("active");
     } else {
-      infoDiv.innerHTML = "";
+      sidePanel.classList.remove("active");
     }
   });
 }
@@ -333,6 +481,15 @@ async function openGraphModal() {
   const closeModal = () => modal.classList.remove("active");
   closeBtn.onclick = closeModal;
   overlay.onclick = closeModal;
+
+  // 侧边面板关闭按钮
+  const sidePanelCloseBtn = document.getElementById("tarven_side_panel_close");
+  if (sidePanelCloseBtn) {
+    sidePanelCloseBtn.onclick = () => {
+      const sidePanel = document.getElementById("tarven_graph_side_panel");
+      sidePanel.classList.remove("active");
+    };
+  }
 
   // 切换战役
   switchBtn.onclick = async () => {
@@ -521,7 +678,10 @@ function registerTarvenNoteTools() {
               description: "Entity type - MUST use one of these exact values"
             },
             name: { type: "string" },
-            properties: { type: "object" },
+            properties: {
+              type: "object",
+              description: "Entity properties. Special list fields (alias, used_name, note) will append values instead of overwriting. Other fields will overwrite."
+            },
             metadata: { type: "object" }
           }
         }
@@ -550,7 +710,7 @@ function registerTarvenNoteTools() {
   registerFunctionTool({
     name: "tarven_store_entities",
     displayName: "Tarven Store Entities",
-    description: "Store or update entities and relationships. Supports upsert - same entity/relationship will be updated.",
+    description: "Store or update entities and relationships. Supports upsert - same entity/relationship will be updated. List fields (alias, used_name, note) append values; other fields overwrite.",
     parameters: storeEntitiesSchema,
     action: async (params) => {
       if (!currentCampaignId) {

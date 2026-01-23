@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
 
+    # SQLite settings
+    sqlite_db_path: str = "data/tarven_note.db"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dim: int = 1536
+
     class Config:
         env_file = ".env"
 

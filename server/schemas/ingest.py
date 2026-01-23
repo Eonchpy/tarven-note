@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +14,8 @@ class IngestRelationship(BaseModel):
     from_entity_name: str
     to_entity_name: str
     type: str
+    bidirectional: bool = False
+    reverse_type: Optional[str] = None
     properties: Dict[str, Any] = Field(default_factory=dict)
 
 

@@ -250,6 +250,14 @@ async function fetchSubgraph(entityName, depth = 2) {
   return response.json();
 }
 
+async function fetchEntityDetails(entityId) {
+  if (!currentCampaignId) return null;
+  const url = `${backendUrl}/api/campaigns/${currentCampaignId}/entities/${entityId}`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  return response.json();
+}
+
 async function fetchAllEntities() {
   if (!currentCampaignId) return [];
   const url = `${backendUrl}/api/campaigns/${currentCampaignId}/entities`;
@@ -259,18 +267,25 @@ async function fetchAllEntities() {
 
 let networkInstance = null;
 
-function formatValue(value) {
+function formatValue(value, depth = 0) {
   if (value === null || value === undefined) {
     return '';
   }
   if (Array.isArray(value)) {
-    return value.join(', ');
+    // 数组中的元素也可能是对象
+    return value.map(item => {
+      if (typeof item === 'object' && item !== null) {
+        return formatValue(item, depth + 1);
+      }
+      return item;
+    }).join(', ');
   }
   if (typeof value === 'object') {
-    // Format nested object as key-value pairs
-    let html = '<div style="margin-left: 15px;">';
+    const indent = depth * 15;
+    let html = `<div style="margin-left: ${indent}px;">`;
     for (const [k, v] of Object.entries(value)) {
-      html += `<div style="margin: 3px 0;"><span style="color: #888;">${k}:</span> ${v}</div>`;
+      const formattedV = formatValue(v, depth + 1);
+      html += `<div style="margin: 3px 0;"><span style="color: #888;">${k}:</span> ${formattedV}</div>`;
     }
     html += '</div>';
     return html;
@@ -421,14 +436,22 @@ function renderGraph(data, container) {
   }
   networkInstance = new vis.Network(container, { nodes, edges }, options);
 
-  networkInstance.on("click", (params) => {
+  networkInstance.on("click", async (params) => {
     const sidePanel = document.getElementById("tarven_graph_side_panel");
     const sidePanelContent = document.getElementById("tarven_side_panel_content");
 
     if (params.nodes.length > 0) {
       const node = nodes.get(params.nodes[0]);
-      sidePanelContent.innerHTML = formatEntityDetails(node);
+      sidePanelContent.innerHTML = '<div style="padding: 20px; color: #888;">加载中...</div>';
       sidePanel.classList.add("active");
+
+      // 从API获取完整实体详情
+      const entityId = node._data.entity_id || node._data.id || node.id;
+      const entityDetails = await fetchEntityDetails(entityId);
+      if (entityDetails) {
+        node._data.properties = entityDetails.properties || {};
+      }
+      sidePanelContent.innerHTML = formatEntityDetails(node);
     } else if (params.edges.length > 0) {
       const edge = edges.get(params.edges[0]);
       sidePanelContent.innerHTML = formatRelationshipDetails(edge);
@@ -699,7 +722,51 @@ function registerTarvenNoteTools() {
             name: { type: "string" },
             properties: {
               type: "object",
-              description: "Entity properties. Special list fields (alias, used_name, note) will append values instead of overwriting. Other fields will overwrite."
+              description: "实体属性，key已钉死，请严格按照定义的字段存储",
+              properties: {
+                // 通用字段
+                description: { type: "string", description: "描述" },
+                // 列表字段（追加而非覆盖）
+                aliases: { type: "array", items: { type: "string" }, description: "别名列表" },
+                used_names: { type: "array", items: { type: "string" }, description: "曾用名" },
+                notes: { type: "array", items: { type: "string" }, description: "备注" },
+                // Character字段
+                occupation: { type: "string", description: "职业" },
+                age: { type: "integer", description: "年龄" },
+                gender: { type: "string", description: "性别" },
+                appearance: { type: "string", description: "外貌" },
+                personality: { type: "string", description: "性格" },
+                background: { type: "string", description: "背景" },
+                // Location字段
+                location_type: { type: "string", description: "地点类型" },
+                address: { type: "string", description: "地址" },
+                // Item字段
+                item_type: { type: "string", description: "物品类型" },
+                rarity: { type: "string", description: "稀有度" },
+                // Event字段
+                event_time: { type: "string", description: "事件时间" },
+                participants: { type: "array", items: { type: "string" }, description: "参与者" },
+                // Organization字段
+                org_type: { type: "string", description: "组织类型" },
+                members: { type: "array", items: { type: "string" }, description: "成员" },
+                // 规则系统属性
+                attributes: {
+                  type: "object",
+                  description: "规则系统属性（COC/DND等）",
+                  properties: {
+                    stats: { type: "object", description: "基础属性 {STR:50, CON:60...}" },
+                    skills: { type: "object", description: "技能值 {侦查:60, 图书馆使用:40...}" },
+                    hp: { type: "integer", description: "生命值" },
+                    mp: { type: "integer", description: "魔法值" },
+                    san: { type: "integer", description: "理智值(COC)" },
+                    luck: { type: "integer", description: "幸运值" },
+                    level: { type: "integer", description: "等级(DND)" },
+                    class: { type: "string", description: "职业(DND)" },
+                    race: { type: "string", description: "种族" },
+                    ext: { type: "object", description: "扩展字段" }
+                  }
+                }
+              }
             },
             metadata: { type: "object" }
           }
@@ -717,6 +784,16 @@ function registerTarvenNoteTools() {
               type: "string",
               enum: ["KNOWS", "TRUSTS", "FEARS", "LOVES", "HATES", "LOCATED_AT", "WORKS_AT", "LIVES_AT", "PARTICIPATED_IN", "WITNESSED", "CAUSED", "OWNS", "USED", "FOUND", "BELONGS_TO", "CONNECTED_TO"],
               description: "Relationship type. Prefer English enum values for Neo4j label. Chinese types (接触, 知晓) will be stored in properties.type"
+            },
+            bidirectional: {
+              type: "boolean",
+              description: "是否双向关系。如果为true，会自动创建反向关系。例如'A和B是朋友'应设为true",
+              default: false
+            },
+            reverse_type: {
+              type: "string",
+              enum: ["KNOWS", "TRUSTS", "FEARS", "LOVES", "HATES", "LOCATED_AT", "WORKS_AT", "LIVES_AT", "PARTICIPATED_IN", "WITNESSED", "CAUSED", "OWNS", "USED", "FOUND", "BELONGS_TO", "CONNECTED_TO"],
+              description: "反向关系类型。仅当bidirectional=true时有效。如A憎恨B，B恐惧A，则type=HATES, reverse_type=FEARS。如果不填则默认与type相同"
             },
             properties: { type: "object" }
           }

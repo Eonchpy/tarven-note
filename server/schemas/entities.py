@@ -20,5 +20,5 @@ class EntityResponse(BaseModel):
     entity_id: str
     type: str
     name: str
-    properties: Dict[str, Any]
-    metadata: Dict[str, Any]
+    properties: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None

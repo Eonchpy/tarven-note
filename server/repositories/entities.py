@@ -3,43 +3,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from server.db.neo4j import get_session
-from server.repositories.utils import normalize_label, node_to_dict, serialize_map
-
-# Fields that should append to list instead of overwrite
-APPEND_FIELDS = {"alias", "used_name", "note"}
-
-
-def smart_merge(
-    old_props: Dict[str, Any],
-    new_props: Dict[str, Any],
-) -> Dict[str, Any]:
-    """
-    Merge properties with smart handling for list fields.
-
-    - For fields in APPEND_FIELDS: append to list
-    - For other fields: overwrite
-    """
-    result = dict(old_props)
-
-    for key, new_value in new_props.items():
-        if key in APPEND_FIELDS:
-            # List append behavior
-            old_value = result.get(key, [])
-
-            # Ensure old_value is a list
-            if not isinstance(old_value, list):
-                old_value = [old_value] if old_value else []
-
-            # Append new value(s)
-            if isinstance(new_value, list):
-                result[key] = old_value + new_value
-            else:
-                result[key] = old_value + [new_value]
-        else:
-            # Overwrite behavior
-            result[key] = new_value
-
-    return result
+from server.repositories.utils import node_to_dict
 
 
 def create_entity(
@@ -49,41 +13,27 @@ def create_entity(
     properties: Dict[str, Any],
     metadata: Dict[str, Any],
 ) -> Dict[str, Any]:
-    label = normalize_label(entity_type, prefix="E", upper=False)
+    """创建实体节点（Neo4j只存基本信息，属性存SQLite）"""
     created_at = datetime.utcnow()
 
-    # Check if entity already exists (by name only, not type)
+    # Check if entity already exists
     existing = get_entity_by_name(campaign_id, name)
 
     if existing:
-        # Entity exists - use smart_merge
         entity_id = existing["entity_id"]
-        merged_props = smart_merge(existing.get("properties", {}), properties)
-        merged_meta = smart_merge(existing.get("metadata", {}), metadata)
         is_new = False
-        # Allow type update if current type is "Unknown"
         should_update_type = existing.get("type") == "Unknown"
     else:
-        # New entity
         entity_id = str(uuid4())
-        merged_props = properties
-        merged_meta = metadata
         is_new = True
         should_update_type = True
 
-    # Serialize properties and metadata to JSON strings
-    properties_payload = serialize_map(merged_props)
-    metadata_payload = serialize_map(merged_meta)
-
-    # Build query - MERGE only on campaign_id and name (not type)
-    # Use base Entity label to match regardless of type-specific label
+    # Build query - Neo4j只存基本信息，属性存SQLite
     query = (
         "MATCH (c:Campaign {campaign_id: $campaign_id}) "
         "MERGE (e:Entity { campaign_id: $campaign_id, name: $name }) "
         "SET "
         "e.entity_id = $entity_id, "
-        "e.properties = $properties, "
-        "e.metadata = $metadata, "
         "e.updated_at = $updated_at"
     )
 
@@ -104,14 +54,12 @@ def create_entity(
                 "entity_id": entity_id,
                 "entity_type": entity_type,
                 "name": name,
-                "properties": properties_payload,
-                "metadata": metadata_payload,
                 "created_at": created_at,
                 "updated_at": created_at,
             },
         )
         record = result.single()
-    return node_to_dict(record["e"], ["properties", "metadata"])
+    return node_to_dict(record["e"], [])
 
 
 def list_entities(

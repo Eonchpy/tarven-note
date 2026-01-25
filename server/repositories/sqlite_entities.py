@@ -136,6 +136,30 @@ def upsert_entity(
                     _sync_aliases(cursor, campaign_id, existing["entity_id"], aliases)
 
 
+def get_entities_by_names(campaign_id: str, names: List[str]) -> Dict[str, Dict[str, Any]]:
+    """批量根据名称获取实体，返回 {name: entity_data} 字典"""
+    if not names:
+        return {}
+    with get_cursor() as cursor:
+        placeholders = ", ".join(["?"] * len(names))
+        cursor.execute(
+            f"SELECT * FROM entities WHERE campaign_id = ? AND name IN ({placeholders})",
+            [campaign_id] + names
+        )
+        rows = cursor.fetchall()
+        result = {}
+        for row in rows:
+            entity = dict(row)
+            for key in JSON_COLUMNS:
+                if key in entity and entity[key]:
+                    try:
+                        entity[key] = json.loads(entity[key])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            result[entity["name"]] = entity
+        return result
+
+
 def get_entity_by_name(campaign_id: str, name: str) -> Optional[Dict[str, Any]]:
     """根据名称获取实体"""
     logger.info(f"get_entity_by_name: campaign_id={campaign_id}, name={name}")

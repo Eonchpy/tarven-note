@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Query
 
 from server.repositories.queries import find_paths, get_subgraph
@@ -26,6 +28,7 @@ async def subgraph_handler(
     entity_id: str = Query(default=None, alias="entity_id"),
     name: str = Query(default=None),
     depth: int = Query(default=2, ge=1, le=4),
+    detail_level: Literal["skeleton", "summary", "full"] = Query(default="skeleton"),
 ):
     if entity_id in {"", "undefined", "null"}:
         entity_id = None
@@ -33,4 +36,10 @@ async def subgraph_handler(
         name = None
     if not entity_id and not name:
         raise HTTPException(status_code=400, detail="entity_id or name required")
-    return get_subgraph(campaign_id, entity_id=entity_id, name=name, depth=depth)
+    return get_subgraph(
+        campaign_id,
+        entity_id=entity_id,
+        name=name,
+        depth=depth,
+        detail_level=detail_level,
+    )

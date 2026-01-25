@@ -8,16 +8,27 @@ const STORAGE_KEYS = {
   enableTools: "tarven_note_enable_tools"
 };
 
-let backendUrl = "http://localhost:8000";
+let backendUrl = "";  // 动态设置
 let enableTools = true;
 let currentCampaignId = null;
 let currentCampaignName = null;
+
+function getDefaultBackendUrl() {
+  // tarven-note 后端固定在 8001 端口
+  if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    // 局域网访问：使用同一 IP，但端口改为 8001
+    return `http://${window.location.hostname}:8001`;
+  }
+  return "http://localhost:8001";
+}
 
 function loadSettings() {
   const storedUrl = localStorage.getItem(STORAGE_KEYS.backendUrl);
   const storedEnable = localStorage.getItem(STORAGE_KEYS.enableTools);
   if (storedUrl) {
     backendUrl = storedUrl;
+  } else {
+    backendUrl = getDefaultBackendUrl();
   }
   if (storedEnable !== null) {
     enableTools = storedEnable === "true";
@@ -162,6 +173,48 @@ function addGraphStyles() {
       padding: 15px;
       font-size: 13px;
     }
+    .tarven-campaign-selector {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--SmartThemeBlurTintColor, #1a1a1a);
+      border-radius: 10px;
+      padding: 20px;
+      z-index: 10001;
+      min-width: 280px;
+      max-width: 90vw;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .tarven-campaign-selector-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 10000;
+    }
+    .tarven-campaign-selector h3 {
+      margin: 0 0 15px 0;
+      font-size: 16px;
+    }
+    .tarven-campaign-item {
+      padding: 12px 15px;
+      margin: 8px 0;
+      background: rgba(255,255,255,0.1);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .tarven-campaign-item:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    .tarven-campaign-item-name {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .tarven-campaign-item-date {
+      font-size: 11px;
+      color: #888;
+    }
     .tarven-entity-name {
       font-size: 16px;
       font-weight: bold;
@@ -203,8 +256,29 @@ function addGraphStyles() {
     }
     @media (max-width: 768px) {
       .tarven-graph-container {
-        width: 95vw; height: 90vh;
+        position: fixed;
+        top: 5vh;
+        left: 2.5vw;
+        transform: none;
+        width: 95vw;
+        height: 90vh;
         border-radius: 5px;
+      }
+      .tarven-campaign-selector {
+        position: fixed;
+        top: 10vh;
+        left: 5vw;
+        transform: none;
+        width: 90vw;
+        max-height: 80vh;
+        padding: 15px;
+      }
+      .tarven-graph-side-panel {
+        width: 100%;
+        right: -100%;
+      }
+      .tarven-graph-side-panel.active {
+        right: 0;
       }
       .tarven-graph-header {
         flex-wrap: wrap; gap: 5px;
@@ -464,29 +538,76 @@ function renderGraph(data, container) {
 
 async function fetchCampaigns() {
   const url = `${backendUrl}/api/campaigns`;
-  const response = await fetch(url);
-  return response.json();
+  console.log("fetchCampaigns: url=", url);
+  try {
+    const response = await fetch(url);
+    console.log("fetchCampaigns: status=", response.status);
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("fetchCampaigns: error response=", text);
+      throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error("fetchCampaigns: fetch error=", error);
+    throw error;
+  }
 }
 
 async function selectCampaign() {
-  const campaigns = await fetchCampaigns();
-  if (!campaigns || campaigns.length === 0) {
-    alert("暂无战役，请先通过对话创建战役");
-    return false;
-  }
-  const options = campaigns.map((c, i) => {
-    const date = c.created_at ? new Date(c.created_at).toLocaleString() : "";
-    return `${i + 1}. ${c.name} (${date})`;
-  }).join("\n");
-  const choice = prompt(`请选择战役:\n${options}\n\n输入序号:`);
-  if (!choice) return false;
-  const index = parseInt(choice) - 1;
-  if (index >= 0 && index < campaigns.length) {
-    currentCampaignId = campaigns[index].campaign_id;
-    currentCampaignName = campaigns[index].name;
-    return true;
-  } else {
-    alert("无效选择");
+  try {
+    console.log("selectCampaign: fetching campaigns...");
+    const campaigns = await fetchCampaigns();
+    console.log("selectCampaign: campaigns=", campaigns);
+
+    if (!campaigns || campaigns.length === 0) {
+      alert("暂无战役，请先通过对话创建战役");
+      return false;
+    }
+
+    return new Promise((resolve) => {
+      // 创建选择弹窗
+      const overlay = document.createElement("div");
+      overlay.className = "tarven-campaign-selector-overlay";
+
+      const selector = document.createElement("div");
+      selector.className = "tarven-campaign-selector";
+      selector.innerHTML = `<h3>选择战役</h3>`;
+
+      campaigns.forEach((c, i) => {
+        const date = c.created_at ? new Date(c.created_at).toLocaleString() : "";
+        const item = document.createElement("div");
+        item.className = "tarven-campaign-item";
+        item.innerHTML = `
+          <div class="tarven-campaign-item-name">${c.name}</div>
+          <div class="tarven-campaign-item-date">${date}</div>
+        `;
+        item.onclick = () => {
+          currentCampaignId = c.campaign_id;
+          currentCampaignName = c.name;
+          cleanup();
+          resolve(true);
+        };
+        selector.appendChild(item);
+      });
+
+      const cleanup = () => {
+        overlay.remove();
+        selector.remove();
+      };
+
+      overlay.onclick = () => {
+        cleanup();
+        resolve(false);
+      };
+
+      document.body.appendChild(overlay);
+      document.body.appendChild(selector);
+      console.log("selectCampaign: modal created");
+    });
+  } catch (error) {
+    console.error("selectCampaign error:", error);
+    alert("获取战役列表失败: " + error.message);
     return false;
   }
 }
@@ -848,7 +969,12 @@ function registerTarvenNoteTools() {
       to_name: { type: "string", description: "路径终点名称" },
       max_hops: { type: "number", description: "最大跳数" },
       entity_id: { type: "string", description: "子图中心实体 ID (或用 entity_name)" },
-      depth: { type: "number", description: "子图深度" }
+      depth: { type: "number", description: "子图深度" },
+      detail_level: {
+        type: "string",
+        enum: ["skeleton", "summary", "full"],
+        description: "详情级别: skeleton(仅ID和名称), summary(含description), full(完整属性)"
+      }
     },
     required: ["query_type"]
   });
@@ -901,10 +1027,11 @@ function registerTarvenNoteTools() {
             return JSON.stringify({ success: false, error: "entity_id or entity_name required" });
           }
           const depth = params.depth ?? 2;
+          const detailLevel = params.detail_level ?? "skeleton";
           if (entityId) {
-            url += `/subgraph?entity_id=${encodeURIComponent(entityId)}&depth=${depth}`;
+            url += `/subgraph?entity_id=${encodeURIComponent(entityId)}&depth=${depth}&detail_level=${detailLevel}`;
           } else {
-            url += `/subgraph?name=${encodeURIComponent(entityName)}&depth=${depth}`;
+            url += `/subgraph?name=${encodeURIComponent(entityName)}&depth=${depth}&detail_level=${detailLevel}`;
           }
         }
         const response = await fetch(url);

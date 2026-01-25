@@ -1,8 +1,9 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from server.db.neo4j import get_session
 from server.repositories.utils import deserialize_map
+from server.repositories.sqlite_entities import get_entities_by_names
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ def get_subgraph(
     entity_id: Optional[str] = None,
     name: Optional[str] = None,
     depth: int = 2,
+    detail_level: Literal["skeleton", "summary", "full"] = "skeleton",
 ) -> Dict[str, List[Dict[str, Any]]]:
     logger.info(f"get_subgraph called: campaign_id={campaign_id}, entity_id={entity_id}, name={name}, depth={depth}")
     depth = max(1, min(depth, 4))
@@ -94,9 +96,10 @@ def get_subgraph(
         nodes = [
             {
                 "id": node.get("entity_id"),
+                "entity_id": node.get("entity_id"),
                 "label": node.get("name"),
                 "type": node.get("type"),
-                "properties": deserialize_map(node.get("properties")),
+                "properties": {},
             }
             for node in record["nodes"]
             if node.get("entity_id")
@@ -112,5 +115,27 @@ def get_subgraph(
             for rel in record["rels"]
             if rel.get("relationship_id")
         ]
+
+        # 根据 detail_level 补充属性
+        if detail_level != "skeleton" and nodes:
+            node_names = [n["label"] for n in nodes]
+            sqlite_data = get_entities_by_names(campaign_id, node_names)
+            skip_keys = {"id", "entity_id", "campaign_id", "type", "name", "created_at", "updated_at"}
+
+            for node in nodes:
+                entity_data = sqlite_data.get(node["label"])
+                if entity_data:
+                    if detail_level == "summary":
+                        # summary: 只返回 description
+                        node["properties"] = {
+                            "description": entity_data.get("description")
+                        } if entity_data.get("description") else {}
+                    elif detail_level == "full":
+                        # full: 返回所有属性
+                        node["properties"] = {
+                            k: v for k, v in entity_data.items()
+                            if k not in skip_keys and v is not None
+                        }
+
         logger.info(f"Processed nodes count: {len(nodes)}, edges count: {len(edges)}")
         return {"nodes": nodes, "edges": edges}

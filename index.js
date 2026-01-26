@@ -10,8 +10,17 @@ const STORAGE_KEYS = {
 
 let backendUrl = "";  // 动态设置
 let enableTools = true;
-let currentCampaignId = null;
-let currentCampaignName = null;
+
+// 图谱界面专用：当前查看的战役（可能与当前chat不同）
+let graphViewCampaignId = null;
+let graphViewCampaignName = null;
+
+// 获取当前 chat_id，直接作为 campaign_id 使用
+function getCampaignId() {
+  const context = globalThis.SillyTavern?.getContext?.();
+  if (!context) return null;
+  return context.getCurrentChatId?.() || null;
+}
 
 function getDefaultBackendUrl() {
   // tarven-note 后端固定在 8001 端口
@@ -318,23 +327,26 @@ const NODE_COLORS = {
 };
 
 async function fetchSubgraph(entityName, depth = 2) {
-  if (!currentCampaignId) return null;
-  const url = `${backendUrl}/api/campaigns/${currentCampaignId}/subgraph?name=${encodeURIComponent(entityName)}&depth=${depth}`;
+  const campaignId = graphViewCampaignId || getCampaignId();
+  if (!campaignId) return null;
+  const url = `${backendUrl}/api/campaigns/${campaignId}/subgraph?name=${encodeURIComponent(entityName)}&depth=${depth}`;
   const response = await fetch(url);
   return response.json();
 }
 
 async function fetchEntityDetails(entityId) {
-  if (!currentCampaignId) return null;
-  const url = `${backendUrl}/api/campaigns/${currentCampaignId}/entities/${entityId}`;
+  const campaignId = graphViewCampaignId || getCampaignId();
+  if (!campaignId) return null;
+  const url = `${backendUrl}/api/campaigns/${campaignId}/entities/${entityId}`;
   const response = await fetch(url);
   if (!response.ok) return null;
   return response.json();
 }
 
 async function fetchAllEntities() {
-  if (!currentCampaignId) return [];
-  const url = `${backendUrl}/api/campaigns/${currentCampaignId}/entities`;
+  const campaignId = graphViewCampaignId || getCampaignId();
+  if (!campaignId) return [];
+  const url = `${backendUrl}/api/campaigns/${campaignId}/entities`;
   const response = await fetch(url);
   return response.json();
 }
@@ -583,8 +595,9 @@ async function selectCampaign() {
           <div class="tarven-campaign-item-date">${date}</div>
         `;
         item.onclick = () => {
-          currentCampaignId = c.campaign_id;
-          currentCampaignName = c.name;
+          // 只用于图谱界面查看，不影响 function call
+          graphViewCampaignId = c.campaign_id;
+          graphViewCampaignName = c.name;
           cleanup();
           resolve(true);
         };
@@ -616,8 +629,13 @@ async function openGraphModal() {
   // 确保样式已加载
   addGraphStyles();
 
-  // 如果没有当前战役，尝试获取战役列表让用户选择
-  if (!currentCampaignId) {
+  // 如果没有指定查看的战役，默认使用当前 chat 的战役
+  if (!graphViewCampaignId) {
+    graphViewCampaignId = getCampaignId();
+  }
+
+  // 如果还是没有，让用户选择一个历史战役查看
+  if (!graphViewCampaignId) {
     const selected = await selectCampaign();
     if (!selected) return;
   }
@@ -628,8 +646,8 @@ async function openGraphModal() {
 
   // 显示当前战役名称
   const campaignNameSpan = document.getElementById("tarven_campaign_name");
-  if (campaignNameSpan && currentCampaignName) {
-    campaignNameSpan.textContent = `- ${currentCampaignName}`;
+  if (campaignNameSpan && graphViewCampaignName) {
+    campaignNameSpan.textContent = `- ${graphViewCampaignName}`;
   }
 
   const canvas = document.getElementById("tarven_graph_canvas");
@@ -658,7 +676,7 @@ async function openGraphModal() {
   switchBtn.onclick = async () => {
     const selected = await selectCampaign();
     if (selected) {
-      campaignNameSpan.textContent = `- ${currentCampaignName}`;
+      campaignNameSpan.textContent = `- ${graphViewCampaignName}`;
       fullBtn.click();
     }
   };
@@ -772,14 +790,17 @@ function registerTarvenNoteTools() {
     description: "创建新的 TRPG 战役",
     parameters: createCampaignSchema,
     action: async (params) => {
+      const campaignId = getCampaignId();
+      if (!campaignId) {
+        return JSON.stringify({ success: false, error: "No active chat" });
+      }
       try {
         const response = await fetch(`${backendUrl}/api/campaigns`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(params)
+          body: JSON.stringify({ ...params, campaign_id: campaignId })
         });
         const data = await response.json();
-        currentCampaignId = data.campaign_id;
         return JSON.stringify({
           success: true,
           campaign_id: data.campaign_id,
@@ -813,9 +834,6 @@ function registerTarvenNoteTools() {
         });
         if (!response.ok) {
           return JSON.stringify({ success: false, error: "Campaign not found" });
-        }
-        if (currentCampaignId === params.campaign_id) {
-          currentCampaignId = null;
         }
         return JSON.stringify({ success: true, message: "战役已删除" });
       } catch (error) {
@@ -930,12 +948,13 @@ function registerTarvenNoteTools() {
     description: "Store or update entities and relationships. Supports upsert - same entity/relationship will be updated. List fields (alias, used_name, note) append values; other fields overwrite.",
     parameters: storeEntitiesSchema,
     action: async (params) => {
-      if (!currentCampaignId) {
-        return JSON.stringify({ success: false, error: "No active campaign" });
+      const campaignId = getCampaignId();
+      if (!campaignId) {
+        return JSON.stringify({ success: false, error: "No active chat/campaign" });
       }
       try {
         const response = await fetch(
-          `${backendUrl}/api/campaigns/${currentCampaignId}/ingest`,
+          `${backendUrl}/api/campaigns/${campaignId}/ingest`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -985,11 +1004,12 @@ function registerTarvenNoteTools() {
     description: "Query knowledge graph. Types: entity (by name/type), relationship (by entity IDs), path (between two entities), subgraph (around one entity).",
     parameters: querySchema,
     action: async (params) => {
-      if (!currentCampaignId) {
-        return JSON.stringify({ success: false, error: "No active campaign" });
+      const campaignId = getCampaignId();
+      if (!campaignId) {
+        return JSON.stringify({ success: false, error: "No active chat/campaign" });
       }
       try {
-        let url = `${backendUrl}/api/campaigns/${currentCampaignId}`;
+        let url = `${backendUrl}/api/campaigns/${campaignId}`;
         if (params.query_type === "entity") {
           url += `/entities?`;
           if (params.entity_name) {
@@ -1050,5 +1070,17 @@ jQuery(async () => {
   await setupSettingsUI();
   await setupExtensionMenu();
   registerTarvenNoteTools();
+
+  // 监听 CHAT_CHANGED 事件，重置图谱查看状态
+  const context = globalThis.SillyTavern?.getContext?.();
+  if (context?.eventSource && context?.event_types) {
+    context.eventSource.on(context.event_types.CHAT_CHANGED, () => {
+      // 切换 chat 时重置图谱查看状态，下次打开图谱会使用新 chat 的数据
+      graphViewCampaignId = null;
+      graphViewCampaignName = null;
+      console.log(`[tarven-note] Chat changed, campaign reset to: ${getCampaignId()}`);
+    });
+  }
+
   console.log("tarven-note tools registered");
 });

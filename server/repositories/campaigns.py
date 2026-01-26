@@ -6,8 +6,16 @@ from server.db.neo4j import get_session
 from server.repositories.utils import node_to_dict, serialize_map
 
 
-def create_campaign(name: str, system: str, description: Optional[str], metadata: Dict[str, Any]) -> Dict[str, Any]:
-    campaign_id = str(uuid4())
+def create_campaign(
+    name: str,
+    system: str,
+    description: Optional[str],
+    metadata: Dict[str, Any],
+    campaign_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    # 如果没有传入 campaign_id，则自动生成
+    if not campaign_id:
+        campaign_id = str(uuid4())
     created_at = datetime.utcnow()
     metadata_payload = serialize_map(metadata)
     with get_session() as session:
@@ -106,3 +114,37 @@ def delete_campaign(campaign_id: str) -> bool:
         )
         record = result.single()
     return record["deleted"] > 0
+
+
+def ensure_campaign_exists(campaign_id: str) -> Dict[str, Any]:
+    """确保 campaign 存在，不存在则自动创建"""
+    existing = get_campaign(campaign_id)
+    if existing:
+        return existing
+
+    # 自动创建，使用 campaign_id 作为名称
+    created_at = datetime.utcnow()
+    with get_session() as session:
+        result = session.run(
+            """
+            CREATE (c:Campaign {
+              campaign_id: $campaign_id,
+              name: $name,
+              system: 'auto',
+              description: 'Auto-created campaign',
+              status: 'active',
+              metadata: '{}',
+              created_at: $created_at,
+              updated_at: $updated_at
+            })
+            RETURN c
+            """,
+            {
+                "campaign_id": campaign_id,
+                "name": campaign_id,
+                "created_at": created_at,
+                "updated_at": created_at,
+            },
+        )
+        record = result.single()
+    return node_to_dict(record["c"], ["metadata"]) if record else None

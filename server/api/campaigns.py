@@ -19,6 +19,7 @@ async def create_campaign_handler(payload: CampaignCreate):
         payload.system,
         payload.description,
         payload.metadata,
+        payload.campaign_id,
     )
     return campaign
 

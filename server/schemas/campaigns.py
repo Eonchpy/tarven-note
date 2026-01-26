@@ -9,6 +9,7 @@ class CampaignCreate(BaseModel):
     system: str
     description: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    campaign_id: Optional[str] = None  # 可选，前端可传入 chat_id
 
 
 class CampaignUpdate(BaseModel):

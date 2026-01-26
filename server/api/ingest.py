@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
+from server.repositories.campaigns import ensure_campaign_exists
 from server.repositories.entities import create_entity, get_entity_by_name
 from server.repositories.relationships import create_relationship
 from server.repositories.sqlite_entities import upsert_entity as sqlite_upsert
@@ -11,6 +12,9 @@ router = APIRouter(prefix="/api/campaigns/{campaign_id}", tags=["ingest"])
 
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest_handler(campaign_id: str, payload: IngestRequest):
+    # 自动创建 campaign（如果不存在）
+    ensure_campaign_exists(campaign_id)
+
     entity_map: dict[str, str] = {}
 
     for entity in payload.entities:

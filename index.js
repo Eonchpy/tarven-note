@@ -1065,6 +1065,73 @@ function registerTarvenNoteTools() {
   });
 }
 
+// 提示词模板：要求 LLM 输出 tarven-update 标签
+const TARVEN_UPDATE_PROMPT = `[TARVEN-NOTE]
+在回复末尾用 <tarven-update> 标签记录本轮新增/变化的实体和关系。
+
+触发条件：
+- 新角色/NPC/地点/物品/组织出现
+- 角色状态变化（HP、SAN、位置、持有物等）
+- 新关系建立（认识、敌对、同盟等）
+- 新任务/线索/情报获得
+重要：只记录【本轮新增或变化】的内容
+
+格式（必须严格遵守）：
+<tarven-update>
+[用自然语言描述变化，使用完整实体名称，禁止用"他""她""那里"等指代]
+</tarven-update>
+
+示例：
+<tarven-update>
+新增角色托马斯·雷恩（士兵），与Harvey Walters建立队友关系。
+新增情报：狗头人对蜡烛有执念。
+</tarven-update>`;
+
+// generate_interceptor：在生成前注入提示词
+globalThis.tarvenNoteInterceptor = async function(chat, contextSize, abort, type) {
+  if (!enableTools) return;
+
+  // 只在普通生成时注入，不在 quiet/impersonate 等模式
+  if (type === 'quiet') return;
+
+  const systemNote = {
+    is_user: false,
+    is_system: true,
+    mes: TARVEN_UPDATE_PROMPT,
+    extra: {
+      isSmallSys: true  // 标记为小型系统消息，某些预设会特殊处理
+    }
+  };
+
+  // 插入到最后位置（用户消息之后），确保优先级最高
+  chat.push(systemNote);
+  console.log('[tarven-note] Interceptor injected prompt at end, chat length:', chat.length);
+};
+
+// 保存消息到后端
+async function saveMessageToBackend(role, content) {
+  const campaignId = getCampaignId();
+  if (!campaignId) return null;
+
+  try {
+    const response = await fetch(`${backendUrl}/api/campaigns/${campaignId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role, content })
+    });
+    if (!response.ok) {
+      console.error('[tarven-note] Failed to save message:', response.status);
+      return null;
+    }
+    const data = await response.json();
+    console.log('[tarven-note] Message saved:', data.message_id);
+    return data.message_id;
+  } catch (error) {
+    console.error('[tarven-note] Error saving message:', error);
+    return null;
+  }
+}
+
 jQuery(async () => {
   loadSettings();
   await setupSettingsUI();
@@ -1079,6 +1146,24 @@ jQuery(async () => {
       graphViewCampaignId = null;
       graphViewCampaignName = null;
       console.log(`[tarven-note] Chat changed, campaign reset to: ${getCampaignId()}`);
+    });
+
+    // 监听用户消息发送
+    context.eventSource.on(context.event_types.MESSAGE_SENT, async (messageIndex) => {
+      if (!enableTools) return;
+      const message = context.chat[messageIndex];
+      if (message) {
+        await saveMessageToBackend('user', message.mes);
+      }
+    });
+
+    // 监听 AI 消息接收
+    context.eventSource.on(context.event_types.MESSAGE_RECEIVED, async (messageIndex) => {
+      if (!enableTools) return;
+      const message = context.chat[messageIndex];
+      if (message) {
+        await saveMessageToBackend('assistant', message.mes);
+      }
     });
   }
 

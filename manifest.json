@@ -4,6 +4,7 @@
   "requires": [],
   "optional": [],
   "js": "index.js",
+  "generate_interceptor": "tarvenNoteInterceptor",
   "author": "tarven-note",
   "version": "0.1.0",
   "homePage": "https://github.com/your-org/tarven-note",
